@@ -1,68 +1,42 @@
 # Coolify deployment
 
-Use [deploy/compose.yaml](../deploy/compose.yaml) once the Go runtime has a tested image. No service has been deployed for GroceriesBot yet.
+Coolify builds the repository's pinned CGO Dockerfile through `/deploy/compose.yaml`. Use the Personal Server project, production environment and existing GitHub App. Disable automatic deployment until a new build has passed verification.
 
-## Resource configuration
+The app has no public domain or published port. Telegram polling uses outbound HTTPS; the health endpoint listens on container localhost port 8080. Compose sets one replica, UID 10001, read-only root, 128 MiB memory, 0.5 CPU, dropped capabilities and an 8 MiB `/tmp` filesystem. Go uses `GOMEMLIMIT=64MiB` and `GOMAXPROCS=1`.
 
-Create a Docker Compose application in the existing Personal Server project. Use the repository root as the base directory and `deploy/compose.yaml` as the Compose location. Coolify supports repository-based Compose deployments and runtime variable references; see its [Compose documentation](https://coolify.io/docs/applications/builds/docker-compose).
+Set `TELEGRAM_BOT_TOKEN` and `OPENROUTER_API_KEY` as runtime variables, never build arguments. Set `RUN_MODE=paused` during setup and `active` at cutover. Google credentials are migration-only and do not enter the deployed app. Production AI remains disabled in SQLite until the user authorizes credits.
 
-Set these values in Coolify:
+## Persistence
 
-| Variable | Value |
-| --- | --- |
-| `GROCERIESBOT_IMAGE` | Tested image reference, pinned to a digest for production |
-| `TELEGRAM_BOT_TOKEN` | Recovered token from the private local `.env` |
-| `OPENROUTER_API_KEY` | Recovered key from `.env` |
-| `RUN_MODE` | `paused` during setup, `active` at cutover |
+Mount the named volume `groceriesbot-data` at `/data`. Verify the actual volume name after Coolify resolves Compose; retain it across redeployments. It contains the database, WAL, SHM and exclusive instance lock. Keep production and synthetic verification volumes separate. The image initializes `/data` for UID/GID 10001; existing volumes retain their ownership.
 
-The Compose file fixes `DATABASE_PATH=/data/groceriesbot.sqlite3`, `GOMEMLIMIT=64MiB`, and `GOMAXPROCS=1`. It limits the container to 128 MiB and 0.5 CPU, drops Linux capabilities, and uses a read-only root filesystem with an 8 MiB temporary filesystem.
+Coolify handles backups. This project adds no backup process or schedule. Backup coverage remains the user's Coolify configuration.
 
-Set credentials as runtime variables. They do not belong in build arguments or the image. The production bot does not need the Google OAuth credentials. Keep the service without a public domain or published port; polling uses outbound HTTPS. Its health endpoint stays on internal port 8080.
+The bot acquires a nonblocking lifetime lock before opening SQLite or contacting Telegram. Stop the old instance before replacing it; the lock also prevents overlapping consumers. A paused instance checks storage and serves health without provider calls.
 
-## Persistent volume
+## Cutover
 
-The Compose contract declares a named volume, `groceriesbot-data`, mounted at `/data`. Keep that name stable when redeploying. Coolify documents volume and directory mounts in its [persistent storage guide](https://coolify.io/docs/core/persistent-storage/storage-mounts/overview).
+1. Pass the reviewed-build verification and synthetic container persistence checks.
+2. Deploy paused through Coolify; verify limits, storage and health.
+3. Unpublish the n8n grocery workflow. Stop its service after checking that queued/running grocery executions have finished. Preserve its DB/volumes and inactive Dutch workflow for rollback.
+4. Fetch a final Sheets snapshot with `scripts/fetch_sheets.py`; import into a fresh DB with `scripts/import_sheets.py`. Require zero import issues and verify raw snapshot equality, integrity and row counts.
+5. Stop the replacement; transfer the closed/checkpointed DB over SSH into its volume, owner 10001 and mode 0600. Keep real rows outside Git and image layers.
+6. Remove the Telegram webhook with `drop_pending_updates=false` using the CLI. Set `RUN_MODE=active`, then deploy one instance through Coolify.
+7. Check health, pending list rendering and outbox delivery. Record a ten-minute host resource measurement and a restart/persistence check.
 
-The Go image must create `/data` owned by UID/GID `10001:10001` before declaring or using the volume. The Compose service runs with that identity. Docker initializes a new empty named volume from the image directory; an existing volume retains its existing ownership. Check write access before starting the bot. If the volume has the wrong owner, stop the app and correct the owner on the volume to `10001:10001`.
+Exact commands and buttons can be tested with AI disabled. Natural-language, image, and model shelf-placement validation require the recorded scenarios and separate credit authorization in [llm-scenarios.md](llm-scenarios.md). Do not describe fixture outcomes as live Haiku results.
 
-Keep these files on the mount:
+## Operations
 
-```text
-/data/groceriesbot.sqlite3
-/data/groceriesbot.sqlite3-wal
-/data/groceriesbot.sqlite3-shm
-/data/groceriesbot.lock
+```sh
+# Runs with the local tokencrypt grant and prints metadata, not secrets:
+tokencrypt run --with coolify_api_root_token -- python3 scripts/coolify.py status --uuid APP_UUID
+# Run inside the deployed container:
+/app/groceriesbot doctor
+/app/groceriesbot settings get llm.enabled
+/app/groceriesbot settings list
 ```
 
-Mount the directory, rather than the SQLite file. Keep production and test volumes distinct. Run one replica. Stop the old container before starting the new one, and implement the exclusive lock in the Go runtime to catch accidental overlap.
+`scripts/server` uses TokenCrypt's existing SSH passphrase grant. `scripts/coolify.py` provisions the app, uploads runtime secrets from the private `.env`, and requests deployment. It prints filtered metadata; HTTP error details stay in `.local/` for private inspection. Do not dump generated Compose files or container environments.
 
-Coolify handles backups. Confirm that its configured backup covers `groceriesbot-data`; this project adds no backup service or schedule.
-
-## Initial database transfer
-
-The local import is a snapshot. Before production cutover, stop the n8n grocery workflow and fetch the final sheet state into a new empty SQLite database. Verify row counts and import issues before using that file.
-
-Close the importer and other database connections before transferring its database. Confirm that SQLite has checkpointed the WAL; use `PRAGMA wal_checkpoint(TRUNCATE)` while the source application is stopped if a WAL remains. Then transfer the verified database to the production volume over SSH while GroceriesBot is stopped. Preserve mode `0600` and owner `10001:10001`. Do not place real database data in an image layer or Git commit.
-
-Start the new container in paused mode. Check schema, integrity, writable storage, and settings. Paused mode must not poll Telegram or change webhook settings. Test restart persistence before cutover: insert a synthetic record in a separate test database, recreate the container with the same test volume, and confirm that the record, settings, and memory remain. Keep the test volume separate from production.
-
-## Image contract
-
-Task 5 in [implementation.md](implementation.md) must produce a Go image that:
-
-- Includes `/app/groceriesbot`, CA certificates, and timezone data.
-- Creates `/data` with the required owner and runs as UID/GID 10001.
-- Embeds SQL migrations and keeps the process working directory at `/app`.
-- Implements `groceriesbot healthcheck` as a bounded request to its internal liveness endpoint.
-- Opens the database, applies migrations, checks write access, and acquires the process lock before polling.
-- Handles SIGTERM, finishes or persists current work, and closes SQLite within the 30-second stop grace period.
-
-Build SQLite's CGO driver into the binary and use a runtime image compatible with its C library. Do not deploy the source tree through a generic buildpack that guesses the start command or omits CGO.
-
-## Production cutover
-
-Record current Telegram webhook settings. Stop the n8n grocery workflow, take and verify the final import, and install the database on the stopped replacement's volume. Remove the webhook with `drop_pending_updates=false`. Only then set `RUN_MODE=active` and start the single Go instance. Telegram does not allow polling while a webhook remains configured; see [getUpdates](https://core.telegram.org/bots/api#getupdates).
-
-Check a pending list, an addition, a clarification, purchase completion, and a restart with the same volume. Measure idle and workload memory/CPU against [design.md](design.md). Keep the old workflow recoverable through the acceptance period. A rollback must reconcile post-cutover changes before restoring n8n delivery.
-
-Retire the grocery stack after acceptance. Preserve the inactive Dutch workflow and inspect dependencies before stopping shared services. Coolify's own database and Redis belong to Coolify, not this replacement.
+On rollback, stop the Go app, reconcile post-cutover grocery changes, restore n8n service and publish its original workflow version. Do not restart the old bot concurrently with polling.

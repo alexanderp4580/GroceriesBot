@@ -1,6 +1,6 @@
 # Recorded LLM scenarios
 
-No live model results exist yet. Fixture tests check application rules and API contracts; they do not establish Haiku's response shape, interpretation or ordering quality.
+The first recorded run is in [llm-results.md](llm-results.md). Fixture tests check application rules and API contracts; they do not establish Haiku's response shape, interpretation or ordering quality.
 
 Run the capture harness only after the user authorizes OpenRouter spend. It uses synthetic chats and a separate temporary SQLite database, never the production bot, chat or sheets. The harness records each raw HTTP request and response, provider status, usage, latency, observed bot messages and before/after DB rows. It records the model's actual fields and tool choices. It does not require particular wording or a predetermined shelf permutation.
 
@@ -26,9 +26,10 @@ The same recordings reveal output truncation, malformed JSON, unsupported provid
 Scenarios live in `testdata/llm-scenarios.json`. The runner follows a real returned clarification or confirmation when a scenario requests it. If the expected interaction is absent, it records that observation instead of inventing a model answer.
 
 ```sh
-python3 scripts/capture_llm.py --list
+python3 -m pip install --target .local/capture-deps -r scripts/requirements-capture.txt
+PYTHONPATH=.local/capture-deps python3 scripts/capture_llm.py --list
 # Requires separate approval before execution:
-python3 scripts/capture_llm.py --record .local/llm-results/RECORD --allow-paid-model-calls --max-usd 0.25
+PYTHONPATH=.local/capture-deps python3 scripts/capture_llm.py --record .local/llm-results/RECORD --allow-paid-model-calls --max-usd 0.25
 ```
 
 The runner refuses to overwrite records. A recording budget applies across the run; it stops before a request whose conservative token-price allowance exceeds the remaining budget. Missing/invalid usage retains that allowance. Unknown or unavailable model metadata stops the run. Production `llm.enabled` stays false.

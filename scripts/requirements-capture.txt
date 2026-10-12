@@ -1,0 +1,2 @@
+# Only the optional recording harness needs this image fixture dependency.
+Pillow==12.3.0
