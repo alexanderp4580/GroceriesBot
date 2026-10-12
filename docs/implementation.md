@@ -1,5 +1,7 @@
 # GroceriesBot Implementation Plan
 
+Read [architecture-review.md](architecture-review.md) before execution. It proposes corrections to package dependencies, token budgeting, import validation, and recovery. Those proposals have not yet changed this plan's interfaces or runtime settings.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans for native execution, or superpowers:subagent-driven-development if the user selects delegated execution. Track steps with the checkboxes below.
 
 **Goal:** Replace the active n8n groceries workflow with a Go Telegram bot that stores groceries, LLM memory, settings, and delivery state in SQLite and uses less host memory and idle CPU.

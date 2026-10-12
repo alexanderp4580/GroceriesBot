@@ -57,6 +57,7 @@ Mount the named `groceriesbot-data` volume at `/data`. Set `DATABASE_PATH=/data/
 
 ## Documentation
 
+- [Architecture review and proposals](docs/architecture-review.md): package fixes, import gaps, resource improvements, and proposed features.
 - [Design](docs/design.md): runtime behavior and resource budget.
 - [Implementation plan](docs/implementation.md): files, interfaces, tests, and work order.
 - [Deployment](docs/deployment.md): Coolify configuration and persistent storage.
