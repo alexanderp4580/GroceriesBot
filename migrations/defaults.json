@@ -35,5 +35,6 @@
   "processing.timeout_seconds": 120,
   "llm.enabled": false,
   "llm.daily_budget_usd": 1.0,
-  "llm.monthly_budget_usd": 5.0
+  "llm.monthly_budget_usd": 5.0,
+  "display.language": "English"
 }

@@ -501,9 +501,9 @@ func (s *Store) Prune(ctx context.Context, now time.Time) error {
 	for _, table := range []string{"llm_turns", "tool_actions", "outbox"} {
 		condition := ""
 		if table == "outbox" {
-			condition = " AND state='sent'"
+			condition = " AND state IN ('sent','failed')"
 		}
-		_, e = tx.ExecContext(ctx, "DELETE FROM "+table+" WHERE update_id IN (SELECT update_id FROM telegram_updates WHERE state='completed' AND completed_at<? AND update_id NOT IN (SELECT update_id FROM outbox WHERE state!='sent'))"+condition, cut)
+		_, e = tx.ExecContext(ctx, "DELETE FROM "+table+" WHERE update_id IN (SELECT update_id FROM telegram_updates WHERE state='completed' AND completed_at<? AND update_id NOT IN (SELECT update_id FROM outbox WHERE state NOT IN ('sent','failed')))"+condition, cut)
 		if e != nil {
 			return e
 		}

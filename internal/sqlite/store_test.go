@@ -251,3 +251,24 @@ func TestDelayedEditCannotBeOvertaken(t *testing.T) {
 		t.Fatal("new edit overtook delayed older edit", e)
 	}
 }
+func TestTerminalDeliveryFailureIsPruned(t *testing.T) {
+	s := openTest(t)
+	ctx := context.Background()
+	seedUpdate(t, s, 1)
+	u := grocery.Update{ID: 1, ChatID: -123, UserID: 8}
+	s.Complete(ctx, u, []grocery.Outgoing{{Method: "sendMessage", ChatID: -123, Text: "fixture"}}, "")
+	r, e := s.NextReply(ctx)
+	if e != nil {
+		t.Fatal(e)
+	}
+	s.RetryReply(ctx, r, 0, true)
+	s.db.Exec("UPDATE telegram_updates SET completed_at=? WHERE update_id=1", stamp(time.Now().AddDate(0, 0, -40)))
+	if e = s.Prune(ctx, time.Now()); e != nil {
+		t.Fatal(e)
+	}
+	var n int
+	s.db.QueryRow("SELECT count(*) FROM telegram_updates").Scan(&n)
+	if n != 0 {
+		t.Fatal("terminal delivery retained indefinitely")
+	}
+}

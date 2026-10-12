@@ -244,6 +244,14 @@ func (s *Store) Apply(ctx context.Context, k grocery.ActionKey, op grocery.Opera
 	if _, e = tx.ExecContext(ctx, "INSERT INTO chat_state(chat_id,list_revision,updated_at) VALUES(?,1,?) ON CONFLICT(chat_id) DO UPDATE SET list_revision=list_revision+1,updated_at=excluded.updated_at", op.ChatID, stamp(now)); e != nil {
 		return result, e
 	}
+	if op.Kind == "purchase" || op.Kind == "remove" {
+		_, e = tx.ExecContext(ctx, "UPDATE layout_cache SET revision=(SELECT list_revision FROM chat_state WHERE chat_id=?),ids_json=(SELECT json_group_array(value) FROM json_each(layout_cache.ids_json) WHERE EXISTS (SELECT 1 FROM groceries g WHERE g.chat_id=layout_cache.chat_id AND g.id=value AND g.purchased_at IS NULL AND g.deleted_at IS NULL)) WHERE chat_id=? AND revision=(SELECT list_revision-1 FROM chat_state WHERE chat_id=?)", op.ChatID, op.ChatID, op.ChatID)
+	} else {
+		_, e = tx.ExecContext(ctx, "DELETE FROM layout_cache WHERE chat_id=?", op.ChatID)
+	}
+	if e != nil {
+		return result, e
+	}
 	if e = save(ctx, tx, k, op.Kind, args, result, now); e != nil {
 		return result, e
 	}

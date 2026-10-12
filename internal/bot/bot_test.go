@@ -1,6 +1,7 @@
 package bot
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"github.com/alexanderp4580/GroceriesBot/internal/grocery"
@@ -14,11 +15,13 @@ import (
 
 type fixtureModel struct {
 	Calls     int
+	Requests  []openrouter.Request
 	Responses []openrouter.Response
 }
 
-func (f *fixtureModel) Complete(context.Context, openrouter.Request) (openrouter.Response, error) {
+func (f *fixtureModel) Complete(_ context.Context, req openrouter.Request) (openrouter.Response, error) {
 	f.Calls++
+	f.Requests = append(f.Requests, req)
 	if len(f.Responses) == 0 {
 		return openrouter.Response{Message: openrouter.Message{Role: "assistant", Content: `{"ordered_ids":[2,1]}`}}, nil
 	}
@@ -231,5 +234,36 @@ func TestConfirmedMutationReplaysAfterCrash(t *testing.T) {
 	out, e := b.handleCallback(ctx, u)
 	if e != nil || len(out) == 0 || !strings.Contains(out[0].Text, "Added") {
 		t.Fatal(out, e)
+	}
+}
+func TestConfiguredDisplayLanguageAndCategoryContext(t *testing.T) {
+	b, s, m := fixture(t)
+	ctx := context.Background()
+	if e := s.SetSetting(ctx, "display.language", json.RawMessage(`"French"`)); e != nil {
+		t.Fatal(e)
+	}
+	s.SetSetting(ctx, "llm.enabled", json.RawMessage(`true`))
+	m.Responses = []openrouter.Response{{Message: openrouter.Message{Role: "assistant", Content: "Bonjour"}}}
+	send(t, b, s, grocery.Update{ID: 1, ChatID: -123, UserID: 8, Text: "hello"})
+	raw, _ := json.Marshal(m.Requests[0].Messages[0])
+	if !bytes.Contains(raw, []byte("French")) || !bytes.Contains(raw, []byte("Vegetables")) {
+		t.Fatal("behavior settings not supplied to provider")
+	}
+}
+func TestPurchaseRetainsCachedShelfOrderWithoutModelRequest(t *testing.T) {
+	b, s, m := fixture(t)
+	ctx := context.Background()
+	s.SetSetting(ctx, "llm.enabled", json.RawMessage(`true`))
+	m.Responses = []openrouter.Response{{Message: openrouter.Message{Role: "assistant", Content: `{"ordered_ids":[3,1,2]}`}}}
+	for n, name := range []string{"Bread", "Oat milk", "Apples"} {
+		send(t, b, s, grocery.Update{ID: int64(n + 1), ChatID: -123, UserID: 8, Text: "/add " + name})
+	}
+	send(t, b, s, grocery.Update{ID: 4, ChatID: -123, UserID: 8, Text: "/list"})
+	send(t, b, s, grocery.Update{ID: 5, ChatID: -123, UserID: 8, CallbackID: "cb", CallbackData: b.callback("buy", 2, -123, 0), MessageID: 10})
+	u := grocery.Update{ID: 6, ChatID: -123, UserID: 8}
+	s.Accept(ctx, []grocery.Update{u}, 7)
+	out, e := b.list(ctx, u, 0, 0)
+	if e != nil || m.Calls != 1 || out.Buttons[0][0].Text != "✓ 1 × Apples" {
+		t.Fatal("purchase changed cached order or spent credits", out, m.Calls, e)
 	}
 }
