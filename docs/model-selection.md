@@ -1,6 +1,6 @@
 # Model selection
 
-On 2026-10-12, the user selected `anthropic/claude-haiku-5.5` through OpenRouter. The project SQLite setting and importer defaults use this ID. The legacy n8n workflow remains on Sonnet 4.5.
+On 2026-10-12, the user selected `anthropic/claude-haiku-5.5` through OpenRouter with medium effort. The project SQLite settings and importer defaults use this ID and `llm.reasoning_effort="medium"`. The legacy n8n workflow remains on Sonnet 4.5.
 
 ## Benchmark comparison
 

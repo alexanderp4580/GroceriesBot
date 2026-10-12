@@ -10,7 +10,7 @@
 
 **Spec:** [design.md](design.md). Also read [database.md](database.md) and [deployment.md](deployment.md).
 
-**Selected model:** `anthropic/claude-haiku-5.5`, stored in SQLite settings. The user selected it on 2026-10-12 to test its value for this workflow.
+**Selected model:** `anthropic/claude-haiku-5.5` with `llm.reasoning_effort="medium"`, stored in SQLite settings. The user selected it on 2026-10-12 to test its value for this workflow.
 Read [model-selection.md](model-selection.md) before configuring reasoning and sampling parameters. Verify usable tool responses within the 800-token output limit.
 
 ## Global constraints
