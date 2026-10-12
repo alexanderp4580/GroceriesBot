@@ -6,7 +6,7 @@ Updated 2026-10-12. The user chose SQLite for groceries, LLM memory, settings, a
 
 Run the existing Telegram grocery assistant with one Go process and one local SQLite file on Coolify. Reduce the server cost of the n8n main process, worker, runners, PostgreSQL, and Redis. The inspected stack used about 514 MiB in one snapshot; that figure is a baseline, not a peak measurement.
 
-Preserve Telegram, OpenRouter, photos, variant suggestions, reply context, grocery lists, edits, purchase completion, deletion, clearing, and approximate price estimates. Keep the existing `anthropic/claude-sonnet-4.5` model as a setting users can change.
+Preserve Telegram, OpenRouter, photos, variant suggestions, reply context, grocery lists, edits, purchase completion, deletion, clearing, and approximate price estimates. Use `anthropic/claude-haiku-5.5` as the model, selected by the user on 2026-10-12. Keep model selection in SQLite settings. The legacy n8n workflow uses Sonnet 4.5.
 
 ## Runtime
 

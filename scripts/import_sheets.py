@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SETTINGS = {
-    'llm.model': 'anthropic/claude-sonnet-4.5',
+    'llm.model': 'anthropic/claude-haiku-5.5',
     'llm.max_tool_rounds': 6,
     'llm.max_output_tokens': 800,
     'llm.timeout_seconds': 30,

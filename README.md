@@ -13,6 +13,9 @@ The project lives in `/home/deck/SketchBook/Projects/GroceriesBot`.
 
 The Go Telegram runtime still needs implementation. The existing n8n bot remains active. SQLite is the database for the replacement; the imported data represents a point-in-time copy until cutover.
 
+The replacement uses `anthropic/claude-haiku-5.5`, configured in SQLite under `llm.model`.
+See [model-selection.md](docs/model-selection.md) for benchmark evidence and integration notes.
+
 ## Files
 
 | Path | Purpose |

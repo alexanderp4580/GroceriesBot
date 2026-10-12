@@ -47,7 +47,7 @@ Do not hold a transaction open while waiting for Telegram or OpenRouter. Commit 
 
 ## Settings
 
-The importer seeded the existing model, allowed Telegram group, category order, and resource bounds from [design.md](design.md). The Go runtime should expose these CLI operations:
+The importer seeded the allowed Telegram group, category order, and resource bounds from [design.md](design.md). The user then selected `anthropic/claude-haiku-5.5`; the project database and importer defaults now use that model. The Go runtime should expose these CLI operations:
 
 ```text
 groceriesbot settings list
