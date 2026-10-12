@@ -118,7 +118,7 @@ if len(messages) != 20 || messages[0].Content != "message 11" {
 - `(*Store).Apply(ctx context.Context, key grocery.ActionKey, op grocery.Operation, now time.Time) (grocery.Result, error)` commits validation-sensitive state, mutation, revision, and saved result together. Existing action keys return the saved result only if arguments match.
 - `grocery.NewService(db *store.Store, clock func() time.Time) *grocery.Service` and `(*Service).Execute(ctx context.Context, key grocery.ActionKey, chatID, userID int64, toolName string, arguments json.RawMessage) (grocery.Result, error)` expose validated tools.
 
-- [ ] Write tests for default quantity, quantity reset, pending-only edits, immutable added time, selected/all purchase completion, ID gaps, category order and read-only price estimates.
+- [ ] Write tests for default quantity, quantity reset, pending-only edits, immutable added time, selected/all purchase completion, ID gaps, shop-route category order and read-only price estimates. Use the seeded route for both text and button rows; assert Bread precedes Dairy and alias `Vegtables` sorts with Vegetables.
 - [ ] Add tests for unauthorized chats, mixed-chat target IDs, empty IDs, nonfinite/negative quantity, a second user's confirmation, expiry after 300 seconds, and confirmation invalidation after a mutation.
 - [ ] Run `go test ./internal/grocery ./internal/store`; confirm the new cases fail.
 - [ ] Implement typed validation and transactional actions. Persist photo/multi-item proposals as pending actions and require an explicit user response before adding them. Save state and result before returning success.

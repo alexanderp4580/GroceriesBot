@@ -51,7 +51,7 @@ Generate stable database IDs and retain legacy sheet IDs as import metadata. Add
 
 Use history to suggest variants. Confirm items inferred from a photo or broad ingredient request before inserting them. Preserve captions and Telegram reply context. Choose the largest available photo size within the download limit; handle one-photo arrays without indexing a nonexistent third entry.
 
-List pending groceries in the category order stored in settings. Normalize the legacy spelling `Vegtables` to `Vegetables` for display while preserving the source text. Put unknown categories after known ones. Render escaped HTML and bounded message chunks with concise action summaries.
+List pending groceries in the shop route stored under `list.category_order`: Quick / ready food, Vegetables, Fruits, Vegan, Meat, Fish, Bread, Pantry, Candy, Bakery, Dairy, Household, Pharmacy, Drinks. This is the route from the existing n8n workflow, confirmed by the user. Use this sequence for item text and purchase-button rows through the same ordering function. Normalize the legacy spelling `Vegtables` to `Vegetables` for sorting and display while preserving the source text. Put unknown categories after known ones. Render escaped HTML and bounded message chunks with concise action summaries.
 
 Allow edits to pending rows. Application code owns timestamps and cannot change an item's original added date during an edit. Mark selected pending IDs or all pending groceries purchased using the current time. Retain purchased history for suggestions. Delete by database ID and soft-delete rows so historical mutations remain traceable.
 

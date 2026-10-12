@@ -104,7 +104,7 @@ Keep the chosen CGO SQLite driver unless measurements justify replacing it. Pin 
 | Feature | Benefit | Scope and dependency |
 | --- | --- | --- |
 | Deterministic `/list`, `/done`, `/remove`, `/cancel` | Immediate responses for exact commands, no model cost | First version; reuse validated actions and authorization |
-| Purchase buttons on a shopping-list message | Tap an item rather than type IDs | First version; validate callback identity, item state and revision; acknowledge callbacks and update the message |
+| Purchase buttons on a shopping-list message | Tap an item rather than type IDs | First version; use the existing shop route for text and buttons, validate callback identity, item state and revision; acknowledge callbacks and update the message |
 | `/undo` | Recover from a mistaken add, edit, purchase or clear | Next; journal before/after state and refuse undo if later edits conflict |
 | `/usage` and spend limits | See tokens, reasoning, cost, latency and retries | Next; persist provider usage and enforce a configured request/budget policy |
 | `/usual` and saved shopping templates | Re-add chosen staples without another interpretation loop | Later; explicit item selection and confirmation, no automatic scheduler |
