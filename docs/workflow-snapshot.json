@@ -1,0 +1,815 @@
+{
+  "id": "SLffBV8YkETQcXcF",
+  "name": "Groceries Bot",
+  "active": true,
+  "nodes": [
+    {
+      "name": "AI Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ \n  (() => {\n      const message = $json?.message?.text;\n      const reply = $json?.message?.reply_to_message?.text\n      const image = $json?.result?.file_id\n      const caption = $json?.message?.caption\n      if (image && caption) {\n          return `Attached image. Caption: ${caption}`;\n      }\n      if (image) {\n          return \"Attached image\";\n      }\n\n      if (reply) {\n          return `Replying to: ${reply}, message: ${message}`;\n      }\n\n      return message;\n  })()\n}}",
+        "options": {
+          "systemMessage": "=# Grocery Management Assistant\n\n## Role & Purpose\nYou are a Grocery Management Assistant that helps users catalog, organize, and manage their groceries efficiently. Your goal is to streamline grocery shopping, storage, and meal planning through organized data management.\n\n## Data Structure\nManage grocery items with the following fields:\n- **ID**: Sequential number (1 to N)\n- **Name**: Item name and variant\n- **Category**: Food category classification\n- **Quantity**: Number of items (default: 1)\n- **Added Date**: When item was added to list\n- **Purchase Date**: When item was bought (initially empty)\n\n## Core Behaviors\n\n### Adding New Items\n1. **Always get existing groceries first** using the get groceries tool\n2. When user provides basic item (e.g., \"milk\"):\n   - Use quick keyboard suggestion tool to offer variants based on purchase history\n   - Ask for clarification: \"Choose something from the list or type a variant\"\n   - Once clarified, add item with current date/time, appropriate category, quantity=1\n3. **Never set purchase date** when initially adding items\n\n### Image\n1. **Always analyze the image and check the texts**\n2. Use the image text, description, context to create an item that can be added to the grocery list.\n3. Present this example to the user. \"I see a power ade water bottle, lemon flavor, should I add 1x Power Ade Lemon, Drinks to the list?\" make the response structured nicely with new lines. Don't specifically mention all the text, just the detected information.\n\n### Quantity Handling\n- Default quantity is 1 for all items\n- Ask for clarification when quantity matters (e.g., eggs, multi-packs)\n- Quantity setting applies only to the current item, then resets to 1\n\n### Purchase Completion\nWhen user indicates purchase completion (\"I purchased\", \"Purchase completed\"):\n- Use update tool to set purchase date to current time for all unpurchased items\n- Pass specific IDs that need updating\n\n### Grocery item list\nWhen user requests the list of groceries, they are about to go to the store. A list of items will allow be an easy way to track and mark each item. Items should be in order of category: Quick / ready food, Vegtables, Fruits, Vegan, Meat, Fish, Bread, Pantry, Candy, Bakery, Dairy, Household, Pharmacy, Drinks. \nFormat: \ud83c\udf4b 2x Lemons, Fruits\n\n### Price estimation\nWhen user requests price estimate, calculate it for each item. In euros, Netherlands prices. Assume average prices and average quantities. Best effort. Add sum at the end.\n\n\n### Response Format\n**Always respond with specific action taken:**\n- Added: [ID], quantity x name, category \ud83d\udcdd\n- Updated: [ID], quantity x name, category \u270f\ufe0f  \n- Removed: [ID], quantity x name, category \u274c\n- Response can either be normal message, list of suggestions / options or list of grocery items.\n- Always add emojis to all items / options / suggestions when possible.\n- Options / Suggestions must never have HTML or line breaks. Emojis are allowed.\n- Always format normal messages in HTML. Use only the following following HTML/Markdown aliases for message entities can be used:\n<b>bold</b>\n<i>italic</i>\n<code>code</code>\n<s>strike</s>\n<u>underline</u>\n<pre language=\"c++\">code</pre>\nUse \\n for line breaks.\n\n## Interaction Rules\n\n### Communication Style\n- Be concise and direct\n- Always include relevant emojis\n- State exactly what was changed\n- No unnecessary explanations\n\n### User Input Processing\n- Never skip user messages until item is properly added\n- Treat consecutive messages as clarifications (e.g., \"cereal\" \u2192 \"chocolate\" = chocolate cereal)\n- Always verify unclear intent before proceeding\n- If the user is asking for multiple items, or all ingeredients for a pizza, always confirm first with the users. Present all the items that might be required. The user must decide and specify all individual items.\n\n### Tool Usage Priority\n1. Get groceries tool (for context and suggestions)\n2. Quick keyboard suggestion tool (for fast user input)\n3. Update tool (for modifications)\n\n## Constraints\n- Purchase dates are only set during purchase completion, never during initial adding\n- Always retrieve existing groceries before making suggestions\n- Default to quantity=1 unless explicitly specified otherwise\n- Verify ambiguous requests before taking action\n- Always have an output message\n\nCurrent date/time: {{ $now.setZone(\"Europe/Amsterdam\").toFormat('yyyy-MM-dd HH:mm:ss z') }}",
+          "maxIterations": 15,
+          "returnIntermediateSteps": false,
+          "passthroughBinaryImages": true,
+          "enableStreaming": false
+        }
+      }
+    },
+    {
+      "name": "Claude 4.5 Sonnet",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4.5",
+        "options": {}
+      }
+    },
+    {
+      "name": "Get All Groceries",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Get all grocery items from the database.",
+        "options": {}
+      }
+    },
+    {
+      "name": "Add single item",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Add a groceries row to the sheet. This is not purchased yet, it's pending purchase.",
+        "operation": "append",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Name": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Name', ``, 'string') }}",
+            "ID": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('ID', ``, 'string') }}",
+            "Category": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Category', ``, 'string') }}",
+            "Quantity": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Quantity', ``, 'string') }}",
+            "Added DateTime": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Added_DateTime', ``, 'string') }}"
+          },
+          "matchingColumns": [
+            "Name"
+          ],
+          "schema": [
+            {
+              "id": "ID",
+              "displayName": "ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Name",
+              "displayName": "Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Quantity",
+              "displayName": "Quantity",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Added DateTime",
+              "displayName": "Added DateTime",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Purchase DateTime",
+              "displayName": "Purchase DateTime",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {
+          "useAppend": true
+        }
+      }
+    },
+    {
+      "name": "Clear Everything",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Clear all groceries, always ask for confirmation before executing this command.",
+        "operation": "clear",
+        "keepFirstRow": true
+      }
+    },
+    {
+      "name": "Incoming Telegram Message",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {
+          "chatIds": "-5138495076",
+          "userIds": ""
+        }
+      }
+    },
+    {
+      "name": "AI Agent Tool",
+      "type": "@n8n/n8n-nodes-langchain.agentTool",
+      "parameters": {
+        "toolDescription": "Set purchase date for all pending grocery items that don't have a purchase date time.\n\nSpecify all the ids that need an update.",
+        "text": "={{ $fromAI('Prompt__User_Message_', ``, 'string') }}\n\nCurrent time and date {{ $now.setZone(\"Europe/Amsterdam\").toFormat('yyyy-MM-dd HH:mm:ss z') }}",
+        "options": {
+          "batching": {
+            "batchSize": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Batch_Size', ``, 'number') }}"
+          }
+        }
+      }
+    },
+    {
+      "name": "Claude 4.5 Sonnet1",
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "parameters": {
+        "model": "anthropic/claude-sonnet-4.5",
+        "options": {}
+      }
+    },
+    {
+      "name": "Update purchase date for pending item",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "parameters": {
+        "operation": "update",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "row_number": 0,
+            "Purchase DateTime": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Purchase_DateTime', ``, 'string') }}",
+            "ID": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('ID__using_to_match_', ``, 'string') }}"
+          },
+          "matchingColumns": [
+            "ID"
+          ],
+          "schema": [
+            {
+              "id": "ID",
+              "displayName": "ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Name",
+              "displayName": "Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Quantity",
+              "displayName": "Quantity",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": true
+            },
+            {
+              "id": "Added DateTime",
+              "displayName": "Added DateTime",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Purchase DateTime",
+              "displayName": "Purchase DateTime",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      }
+    },
+    {
+      "name": "Update an item",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Update a grocery item by ID. This tool allows making modification to existing items. Make sure it's only for pending items that don't have a purchase date.",
+        "operation": "update",
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "ID": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('ID', ``, 'string') }}",
+            "Name": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Name', ``, 'string') }}",
+            "Category": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Category', ``, 'string') }}",
+            "Quantity": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Quantity', ``, 'string') }}",
+            "Added DateTime": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Added_DateTime', ``, 'string') }}",
+            "Purchase DateTime": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Purchase_DateTime', ``, 'string') }}",
+            "row_number": 0
+          },
+          "matchingColumns": [
+            "ID"
+          ],
+          "schema": [
+            {
+              "id": "ID",
+              "displayName": "ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Name",
+              "displayName": "Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Quantity",
+              "displayName": "Quantity",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Added DateTime",
+              "displayName": "Added DateTime",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Purchase DateTime",
+              "displayName": "Purchase DateTime",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      }
+    },
+    {
+      "name": "Clear sheet in Google Sheets",
+      "type": "n8n-nodes-base.googleSheetsTool",
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Delete specific row by row number. Row number is ID + 1.",
+        "operation": "clear",
+        "startIndex": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Start_Row_Number', ``, 'number') }}"
+      }
+    },
+    {
+      "name": "Structured Output Parser",
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "parameters": {
+        "jsonSchemaExample": "{\n\t\"message\": \"Result / Status / Action / Select an option\",\n\t\"options\": [\"emoji option 1\", \"emoji option 2\"],\n    \"items\": [\"emoji bakery 2x bread\", \"emoji dairy 4x milk\"]\n}"
+      }
+    },
+    {
+      "name": "Simple Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "=static_memory"
+      }
+    },
+    {
+      "name": "Switch",
+      "type": "n8n-nodes-base.switch",
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.output.items }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "array",
+                      "operation": "notEmpty",
+                      "singleValue": true
+                    },
+                    "id": "54bbfcb8-6774-462c-94d9-67721e83cb08"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Items"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "4d6799ea-1605-4a5a-be2b-45f9e97a2f10",
+                    "leftValue": "={{ $json.output.options }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "array",
+                      "operation": "notEmpty",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Options"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "a5608d46-fd6f-43c3-ab7b-142422c8fb6c",
+                    "leftValue": "={{ $json.output.message }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "string",
+                      "operation": "exists",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Message"
+            }
+          ]
+        },
+        "options": {}
+      }
+    },
+    {
+      "name": "Message",
+      "type": "n8n-nodes-base.telegram",
+      "parameters": {
+        "text": "={{ $json.output.message || \"Empty message\" }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      }
+    },
+    {
+      "name": "Options",
+      "type": "n8n-nodes-base.httpRequest",
+      "parameters": {
+        "specifyBody": "json",
+        "jsonBody": "={\n    \"chat_id\": \"-5138495076\",\n    \"parse_mode\": \"HTML\",\n    \"text\": {{ JSON.stringify($json.output.message) }},\n    \"reply_markup\": {\n        \"resize_keyboard\": true,\n        \"one_time_keyboard\": true,\n        \"keyboard\": \n      {{ \nJSON.stringify(\n  $json.output.options.map(item => ({ text: item, callback_data: \"string\" }))    .reduce((acc, curr, i) => {\n      if (i % 3 === 0) acc.push([]);\n      acc[acc.length - 1].push(curr);\n      return acc;\n    }, [])\n)}}\n        \n    }\n}",
+        "options": {}
+      }
+    },
+    {
+      "name": "Loop Over Items",
+      "type": "n8n-nodes-base.splitInBatches",
+      "parameters": {
+        "options": {}
+      }
+    },
+    {
+      "name": "Send a text message",
+      "type": "n8n-nodes-base.telegram",
+      "parameters": {
+        "text": "={{ $json['output.items'] }}",
+        "additionalFields": {
+          "appendAttribution": false,
+          "parse_mode": "HTML"
+        }
+      }
+    },
+    {
+      "name": "Split Out",
+      "type": "n8n-nodes-base.splitOut",
+      "parameters": {
+        "options": {}
+      }
+    },
+    {
+      "name": "Get a file",
+      "type": "n8n-nodes-base.telegram",
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $json.message.photo[2].file_id }}",
+        "additionalFields": {}
+      }
+    },
+    {
+      "name": "Merge",
+      "type": "n8n-nodes-base.merge",
+      "parameters": {
+        "options": {}
+      }
+    },
+    {
+      "name": "Is Image attached",
+      "type": "n8n-nodes-base.if",
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "db0ed63a-cc60-4912-9c25-ace0c4a08f3c",
+              "leftValue": "={{ $json.message.photo[0].file_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "exists",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude 4.5 Sonnet": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get All Groceries": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add single item": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clear Everything": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Incoming Telegram Message": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          },
+          {
+            "node": "Is Image attached",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Claude 4.5 Sonnet1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent Tool",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update purchase date for pending item": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent Tool",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update an item": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Clear sheet in Google Sheets": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Structured Output Parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Split Out",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Options",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Over Items": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a text message": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Out": {
+      "main": [
+        [
+          {
+            "node": "Loop Over Items",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get a file": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Image attached": {
+      "main": [
+        [
+          {
+            "node": "Get a file",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

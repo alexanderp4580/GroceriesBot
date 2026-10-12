@@ -1,0 +1,8 @@
+.env
+.env.*
+!.env.example
+.local/
+secrets/
+backups/
+*.key
+*.pem
