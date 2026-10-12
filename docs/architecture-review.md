@@ -103,8 +103,8 @@ Keep the chosen CGO SQLite driver unless measurements justify replacing it. Pin 
 
 | Feature | Benefit | Scope and dependency |
 | --- | --- | --- |
-| Deterministic `/list`, `/done`, `/remove`, `/cancel` | Immediate responses for exact commands, no model cost | First version; reuse validated actions and authorization |
-| Purchase buttons on a shopping-list message | Tap an item rather than type IDs | First version; use the existing shop route for text and buttons, validate callback identity, item state and revision; acknowledge callbacks and update the message |
+| Direct `/list`, `/done`, `/remove`, `/cancel` | Avoid interpretation calls for exact commands | First version; `/list` uses cached LLM order or requests fresh ordering; mutations use validated actions and authorization |
+| Purchase buttons on a shopping-list message | Tap an item rather than type IDs | First version; preserve LLM item order for text and buttons, validate callback identity, item state and revision; acknowledge callbacks and update the message |
 | `/undo` | Recover from a mistaken add, edit, purchase or clear | Next; journal before/after state and refuse undo if later edits conflict |
 | `/usage` and spend limits | See tokens, reasoning, cost, latency and retries | Next; persist provider usage and enforce a configured request/budget policy |
 | `/usual` and saved shopping templates | Re-add chosen staples without another interpretation loop | Later; explicit item selection and confirmation, no automatic scheduler |
@@ -112,12 +112,12 @@ Keep the chosen CGO SQLite driver unless measurements justify replacing it. Pin 
 
 Undo should apply to the requesting user's last eligible action. Record the expected item versions and apply the inverse in one transaction. A conflict should preserve the newer edits and explain why undo cannot proceed.
 
-Keep routine list and purchase actions deterministic even when natural-language requests use the model. Store callback and command results through the same deduplication path as AI tool actions.
+Keep purchase mutations deterministic. Use the stored shop route as guidance for LLM list ordering, including cross-category adjacency. Validate and cache the returned item IDs, then preserve their sequence in the renderer. Store callback and command results through the same deduplication path as AI tool actions.
 
 ## Work order
 
 1. Amend the design and plan with the package direction, tested model budget, source validation, and recovery rules.
-2. Build configuration, SQLite access and deterministic list/purchase commands as the first working slice.
+2. Build configuration, SQLite access and direct list/purchase handlers as the first working slice; add model ordering in the next step.
 3. Add Haiku interpretation, clarification and photo handling using the same action layer.
 4. Add inline purchase controls, then verify restart and volume behavior.
 5. Measure resource use before production cutover. Add undo and usage reporting after the core flow passes.

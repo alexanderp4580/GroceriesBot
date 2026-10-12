@@ -27,6 +27,7 @@ DEFAULT_SETTINGS = {
     'confirm.expiry_seconds': 300,
     'display.time_zone': 'Europe/Amsterdam',
     'list.category_order': ['Quick / ready food','Vegetables','Fruits','Vegan','Meat','Fish','Bread','Pantry','Candy','Bakery','Dairy','Household','Pharmacy','Drinks'],
+    'list.ordering_mode': 'llm',
     'list.max_context_items': 200,
     'history.max_suggestions': 20,
     'processing.timeout_seconds': 120,
