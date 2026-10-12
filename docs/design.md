@@ -1,92 +1,88 @@
-# GroceriesBot migration design
+# GroceriesBot design
 
-Date: 2026-10-12. Status: proposed, awaiting user review.
+Updated 2026-10-12. The user chose SQLite for groceries, LLM memory, settings, and delivery state. This replaces the initial MySQL proposal.
 
-## Outcome and scope
+## Goal
 
-Replace the existing n8n Groceries Bot with one Go application and MySQL on the existing Coolify server. Preserve the useful Telegram experience while removing workflow orchestration, the second AI agent, and Google Sheets as the live store.
+Run the existing Telegram grocery assistant with one Go process and one local SQLite file on Coolify. Reduce the server cost of the n8n main process, worker, runners, PostgreSQL, and Redis. The inspected stack used about 514 MiB in one snapshot; that figure is a baseline, not a peak measurement.
 
-The user explicitly requested Go and MySQL. Retaining Telegram and OpenRouter, preserving the current feature set, and using long polling are proposed choices for review. The inspected active workflow, summarized in [discovery.md](discovery.md), is the behavior reference.
+Preserve Telegram, OpenRouter, photos, variant suggestions, reply context, grocery lists, edits, purchase completion, deletion, clearing, and approximate price estimates. Keep the existing `anthropic/claude-sonnet-4.5` model as a setting users can change.
 
-No website, account system, local model, Redis, or general workflow engine is in scope. The inactive Dutch workflow is outside this port and must remain recoverable.
+## Runtime
 
-## Approaches considered
+Use Telegram long polling. Persist incoming updates before advancing the offset; Telegram supports polling once the bot's webhook has been removed. See the [Telegram API](https://core.telegram.org/bots/api#getupdates).
 
-1. **Recommended: Go and MySQL, Telegram long polling, one bounded AI tool loop.** Few deployment components; outbound Telegram traffic removes the need for a public webhook route. Code validates all mutations. This requires a deliberate switch away from the existing n8n webhook.
-2. **Go and MySQL with Telegram webhooks.** Preserves the delivery approach but needs an HTTPS route, webhook authentication, and durable intake before acknowledging updates. Suitable if public webhook hosting is preferred.
-3. **Port each n8n node and agent directly.** Closest internal resemblance, but retains unnecessary orchestration and makes model-driven side effects harder to validate. It does not achieve the requested simplification as well.
+Run one polling loop, one ordered update processor, and one outbox loop in the same process. Use one SQLite connection and short transactions. Hold an exclusive OS lock at `/data/groceriesbot.lock` for the process lifetime so a second container cannot consume the same bot or database during redeployment. A second instance exits before it contacts Telegram.
 
-The recommended deployment has one Go container and one dedicated MySQL service with a persistent volume. The live Coolify inventory has no existing MySQL service to reuse.
+Call OpenRouter through a bounded tool loop. Application code checks each tool argument and performs the database mutations. Replace the purchase-completion sub-agent with a SQL update. Reuse HTTP connections. Store accepted model responses before executing their tool calls, then persist each mutation and result in one transaction. On restart, resume the saved response and return saved results for completed actions.
 
-## Application boundaries and flow
+Use the same SQLite file for durable chat history, clarification state, settings, updates, model turns, and replies. Load only the context needed for the current request. Photos stay in bounded memory buffers during processing.
 
-`cmd/groceriesbot` runs the service. Small internal packages own configuration, Telegram transport/rendering, OpenRouter requests, grocery rules, and MySQL persistence. A separate `cmd/import-groceries` imports an explicit CSV export; SQL schema changes live under `migrations/`.
+## Resource budget
 
-One polling process receives Telegram message updates and saves them in MySQL before advancing the polling offset. An inbox processor handles updates in order, checks the allowed chat, loads recent conversation context and relevant grocery history, and passes text, reply context, or image content to OpenRouter.
+These are targets to verify after implementing the Go runtime:
 
-The model chooses from a narrow tool set: read groceries/history, add, edit, mark purchased, remove, propose/confirm clearing, and request clarification. Tool arguments are typed and validated; no model SQL or arbitrary HTTP requests are accepted. The model cannot supply authoritative timestamps or override chat authorization. Use one model configuration, initially the existing `anthropic/claude-sonnet-4.5`, with configurable timeouts and a maximum of 10 tool rounds per update.
+| Measure | Target or configured limit |
+| --- | --- |
+| Application RSS while idle | At most 40 MiB after warmup |
+| Application RSS during fixture workload | At most 96 MiB |
+| Container memory limit | 128 MiB |
+| Go memory target | `GOMEMLIMIT=64MiB` |
+| CPU limit | 0.5 CPU; `GOMAXPROCS=1` |
+| Idle CPU | Below 0.5% of one core over ten minutes |
+| SQLite page cache | About 2 MiB per connection |
+| SQLite connections | One |
+| Message context | Latest 20 messages, at most 12,000 characters |
+| Grocery context | At most 200 pending items and 20 history suggestions |
+| Tool rounds | Six per update |
+| Model output | 800 tokens per request |
+| Model request timeout | 30 seconds |
+| Total update processing deadline | 120 seconds |
+| Photo download | At most 4 MiB |
+| Telegram polling timeout | 50 seconds |
 
-Application code renders the final message, keyboard, or category list, escaping untrusted text. Keep concise replies and emojis. List messages use bounded chunks rather than one HTTP request for every item. Select the largest available photo within configured byte limits, preserving its caption. Do not retain photo bytes after processing.
+Use SQLite WAL, `synchronous=FULL`, `busy_timeout=5000`, `cache_size=-2048`, `mmap_size=0`, and `wal_autocheckpoint=256`. Read the limits from the database where they describe user behavior; keep container memory and CPU limits in deployment configuration. Use indexed queries and pagination for full-list operations rather than loading an unbounded history into an LLM prompt. SQLite documents WAL and cache behavior in its [WAL guide](https://www.sqlite.org/wal.html) and [pragma reference](https://www.sqlite.org/pragma.html).
 
-## Preserved behavior and enforced rules
+Prune message history to 20 messages per chat and a maximum age of 30 days. Prune completed updates, model turns, and sent replies after 30 days; preserve records with pending work. Keep mutation results while their update remains. Trim large completed model payloads after delivery. Run pruning on startup and hourly, not in a busy loop. Coolify handles backups.
 
-- Add items with inferred categories and a default quantity of one. A quantity belongs only to its item; clarification state cannot leak it into the next item.
-- Suggest variants from historical groceries and accept consecutive clarifying replies.
-- Ask for confirmation of proposed items inferred from photos or broad ingredient requests.
-- List pending groceries in the existing category order: Quick / ready food, Vegetables, Fruits, Vegan, Meat, Fish, Bread, Pantry, Candy, Bakery, Dairy, Household, Pharmacy, Drinks. Preserve unknown imported category text and list it after known categories.
-- Edit pending items only. Adding or editing cannot assign a purchase timestamp or change the original added timestamp.
-- Mark specified pending IDs or all pending groceries purchased using application time. Retain purchased rows for suggestions and history.
-- Delete specified groceries by database ID, never by physical row position.
-- Clearing all groceries requires an explicit confirmation associated with the initiating chat and user, expires after five minutes, and is invalidated by intervening grocery mutations. The model cannot invent confirmation. This operation includes purchased history, matching the existing clear-everything tool.
-- Provide best-effort Netherlands price estimates in euros, clearly marked as estimates. Price estimation cannot mutate groceries.
+## Grocery behavior
 
-Store timestamps in UTC and present them in Europe/Amsterdam. Preserve the current group-only authorization; optional allowed user IDs can further restrict access. Scope conversation context by chat and clarification/confirmation state by chat plus user to avoid one group member completing another member's request.
+Generate stable database IDs and retain legacy sheet IDs as import metadata. Add pending groceries with a quantity of one unless the user supplies a quantity. Scope clarifications by chat and user; quantities belong to the current item.
 
-## MySQL persistence
+Use history to suggest variants. Confirm items inferred from a photo or broad ingredient request before inserting them. Preserve captions and Telegram reply context. Choose the largest available photo size within the download limit; handle one-photo arrays without indexing a nonexistent third entry.
 
-Use MySQL 8.4 with InnoDB and utf8mb4, a dedicated database, and a restricted application user. Keep the database on a private container network with no public port.
+List pending groceries in the category order stored in settings. Normalize the legacy spelling `Vegtables` to `Vegetables` for display while preserving the source text. Put unknown categories after known ones. Render escaped HTML and bounded message chunks with concise action summaries.
 
-- `groceries`: generated stable ID, chat ID, name, category, positive quantity, added timestamp, nullable purchase timestamp, and row version. Use soft deletion for recoverable removals; deleted rows are excluded from lists and suggestions.
-- `conversation_messages`: chat ID, user ID, role, message content, and timestamps. Keep the latest 20 turns per chat and prune older content.
-- `pending_actions`: chat/user identity, action type, proposed items or target IDs, list revision, and expiry. These records survive restarts.
-- `telegram_updates`: unique update ID, chat/user IDs, normalized payload, processing state, attempts, and error classification.
-- `tool_actions`: unique update/round/action identity and recorded mutation result, preventing a replay from applying the same operation twice.
-- `outbox`: formatted replies and delivery state, saved in the same transaction as completed changes.
-- `import_rows`: source-file hash and row number mapped to the generated grocery ID, enabling repeatable imports and preserving legacy IDs as metadata.
-- `schema_migrations`: applied migration versions.
+Allow edits to pending rows. Application code owns timestamps and cannot change an item's original added date during an edit. Mark selected pending IDs or all pending groceries purchased using the current time. Retain purchased history for suggestions. Delete by database ID and soft-delete rows so historical mutations remain traceable.
 
-Keep grocery mutations, action records, confirmation consumption, and outbox insertion transactional. Do not hold database transactions open during model or Telegram network calls.
+Clear the full list, including purchased history, only after the initiating user confirms in the same chat. Confirmation expires after five minutes and becomes invalid after an intervening grocery mutation. The model cannot supply proof of confirmation. Increment the chat's list revision in the same transaction as each mutation.
 
-## Failure and recovery behavior
+Price estimates use euros and Netherlands prices. Label them as estimates and keep them read-only. Store timestamps as UTC text and present them in Europe/Amsterdam.
 
-Retry transient Telegram and OpenRouter failures with bounded exponential backoff and rate-limit handling. Invalid model arguments receive a structured tool error, with no database mutation. Stop after the tool-round limit and queue a concise failure reply that reports any changes already committed.
+## Settings and secrets
 
-Persist input and action progress so restarts do not recreate groceries or apply purchase completion twice. Every mutation result must be durable before continuing the model conversation. A repeated update returns previously recorded results.
+Store editable behavior settings as JSON values in `settings`. Seed defaults on an empty database, validate updates, and preserve existing values across restarts and imports. Use a CLI for settings in the first version; keep settings administration outside the LLM tool set.
 
-The Telegram outbox prevents lost replies after committed changes. Telegram message delivery has an ambiguity if a network timeout follows a successful send; a retry may duplicate a reply. Do not claim exactly-once message delivery. Grocery mutations remain deduplicated independently.
+Keep `TELEGRAM_BOT_TOKEN` and `OPENROUTER_API_KEY` in `.env` for local work and Coolify runtime variables in production. Load the optional local `.env` without executing shell syntax; process environment values take precedence. Keep `DATABASE_PATH` and `RUN_MODE` as startup variables. Only `RUN_MODE=active` starts Telegram polling. `paused` permits database checks and health endpoints.
 
-Use structured logs with update IDs, durations, action names, and error classes. Never log API keys, token-bearing URLs, raw image data, or full grocery conversations by default. Provide health/readiness endpoints and graceful shutdown. Measure resource usage in staging before making savings claims.
+The imported database restricts access to the current Telegram group. User restrictions default to an empty list, matching the active workflow. Runtime authorization comes from SQLite settings. `ALLOWED_CHAT_IDS` seeds a new empty database only; reject active startup with an empty allowlist.
 
-## Data migration and cutover
+## Failure handling
 
-Import Google Sheets CSV rather than maintain ongoing Sheets synchronization. Validate headers, retain raw source values in the protected migration archive, and import pending and purchased groceries. Blank purchase dates remain null. Preserve valid legacy IDs as metadata while assigning new stable IDs. Reject invalid quantities, ambiguous dates, duplicate legacy IDs, and malformed rows with a row-level report; do not silently skip or guess them. Run a dry import first and compare row counts and normalized values.
+Deduplicate update IDs, persist each accepted model response, and identify tool actions by update, round, and action index. Commit a grocery mutation together with its saved tool result. On replay, check the saved arguments before returning that result. Resume ordered work after a crash without repeating a committed mutation.
 
-Develop and validate with synthetic data and a separate test Telegram bot. Credential availability has been verified through temporary decrypted exports in the n8n container's memory-backed filesystem, followed by deletion. No secret values were printed or retained. Transferring production credentials into the replacement's protected configuration and reading actual spreadsheet data are later migration steps.
+Persist final Telegram messages in the outbox before marking processing complete. Honor rate limits and retry transient network errors with bounded backoff. Telegram may accept a message before a timeout reaches the caller; a retry can duplicate a reply. The application must preserve grocery state despite that ambiguity.
 
-Before production switch: preserve a restorable workflow backup and encrypted credential backup, record current Telegram webhook settings, stop the active n8n grocery workflow, take the final sheet export, validate/import it, then remove the webhook without dropping pending updates and start the single polling instance. Long polling and webhooks cannot consume the same bot simultaneously, as documented by [Telegram](https://core.telegram.org/bots/api#getupdates).
+Stop after the round limit or processing deadline. Queue a failure reply that reports any actions already committed. Reject malformed tool output without changing grocery rows. Log update IDs, durations, and error codes, excluding credentials and raw conversations.
 
-Keep n8n recoverable while verifying the replacement. If rollback is needed, stop polling, reconcile all post-cutover mutations back into the source sheet from the protected action history, and restore the previous workflow/webhook. Do not retire unrelated Coolify databases, shared infrastructure, or the inactive Dutch workflow as part of this port.
+## Coolify and cutover
 
-## Verification and acceptance
+Use one container with the full `/data` directory on persistent local storage. Keep the SQLite database, WAL, SHM, and instance lock on that mount. Deploy with the compose contract and stop the old instance before starting the replacement. The lock remains the overlap guard.
 
-Use deterministic model/Telegram fixtures for conversational behavior and MySQL integration checks for transactions, replay handling, and import behavior. Cover generic item clarification, per-item quantity reset, multi-item confirmation, photo arrays of different sizes, captions/replies, category ordering, pending-only edits, purchase completion, delete by ID, clear confirmation expiry/user binding, unauthorized chats, malformed model output, network failures, and crash/restart replay.
+The user manages backups through Coolify. Confirm that Coolify's configured backup includes the data volume. Do not add backup containers or schedules.
 
-Verify CSV import twice produces no duplicates and that invalid rows fail visibly. Verify a crash between a committed mutation and Telegram delivery retains the reply without repeating the mutation. Run staging smoke tests with the separate bot before any production switch.
+The imported database is a snapshot while n8n remains active. Before switching Telegram, stop the grocery workflow, fetch a final read-only sheet snapshot into a fresh database, verify it, and install that database on the volume. Remove the webhook without dropping queued updates, then start the replacement in active mode. Retain the old workflow for rollback and reconcile post-cutover changes before restoring it. Preserve the inactive Dutch workflow when retiring the old stack.
 
-Acceptance: the observed grocery behavior works through Telegram; MySQL stores groceries and durable state; no n8n/Redis dependency remains in the replacement; original data is reconciled; rollback is documented and tested; secrets are absent from committed artifacts. This document does not authorize a production cutover by itself.
+## Acceptance
 
-## Reference material
-
-- [Selected active workflow parameters and connections](workflow-snapshot.json), inspected 2026-10-12. Sanitized discovery artifact, not a backup.
-- [Telegram Bot API](https://core.telegram.org/bots/api) for polling, updates, photos, and message rendering.
-- [MySQL InnoDB transaction model](https://dev.mysql.com/doc/refman/8.4/en/innodb-transaction-model.html) for transaction design.
+Pass the conversation, authorization, replay, import, and resource checks in the implementation plan. Verify that a container recreation preserves groceries, memory, and settings, and that a second instance fails before polling. Measure idle and workload resource use on the Coolify host. Report those measurements against the baseline rather than assuming the replacement meets its targets.

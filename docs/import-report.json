@@ -1,0 +1,22 @@
+{
+  "imported_at": "2026-10-12T09:14:07Z",
+  "source_spreadsheets": 1,
+  "source_tabs": 1,
+  "grid_rows": 1005,
+  "source_content_rows": 30,
+  "groceries": 29,
+  "pending": 6,
+  "purchased": 23,
+  "rejected_rows": 0,
+  "source_digest_sha256": "bb96e599ae7dc77b3d7a78321a21aad493a2a8583540ce5000c51f2a33107ad9",
+  "source_snapshot_roundtrip_equal": true,
+  "sqlite_integrity": "ok",
+  "foreign_key_errors": 0,
+  "database_bytes": 163840,
+  "database_mode": "0o600",
+  "env_mode": "0o600",
+  "runtime_settings": 18,
+  "memory_messages": 0,
+  "source_modified": false,
+  "production_switched": false
+}

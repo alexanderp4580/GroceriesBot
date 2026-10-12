@@ -1,0 +1,13 @@
+.git
+.env
+.env.*
+.local
+data
+backups
+secrets
+tests
+**/__pycache__
+*.sqlite*
+*.db
+*-wal
+*-shm

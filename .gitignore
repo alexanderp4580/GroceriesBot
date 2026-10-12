@@ -6,3 +6,10 @@ secrets/
 backups/
 *.key
 *.pem
+data/
+*.sqlite
+*.sqlite3
+*.db
+*-wal
+*-shm
+__pycache__/
