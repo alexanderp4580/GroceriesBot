@@ -54,13 +54,14 @@ type Response struct {
 	Usage   Usage   `json:"usage"`
 }
 type Client struct {
-	key  string
-	HTTP *http.Client
-	URL  string
+	AccountURL string
+	key        string
+	HTTP       *http.Client
+	URL        string
 }
 
 func New(key string, h *http.Client) *Client {
-	return &Client{key: key, HTTP: h, URL: "https://openrouter.ai/api/v1/chat/completions"}
+	return &Client{key: key, HTTP: h, URL: "https://openrouter.ai/api/v1/chat/completions", AccountURL: "https://openrouter.ai/api/v1"}
 }
 func (c *Client) Complete(ctx context.Context, r Request) (Response, error) {
 	body := map[string]any{"model": r.Model, "messages": r.Messages, "max_tokens": r.MaxTokens, "reasoning": map[string]any{"effort": r.Effort}, "provider": map[string]any{"order": []string{"Anthropic"}, "allow_fallbacks": false, "require_parameters": true}}

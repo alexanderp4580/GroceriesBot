@@ -17,9 +17,9 @@ Use `/list` for purchase buttons. The bot updates the same list after a purchase
 | `/usual` or `/usual NAME` | Confirm adding a saved template |
 | `/templates` | List templates |
 | `/alias milk = Oatly Barista` | Approve a name alias |
-| `/usage` | Show model cost, tokens and unresolved reservations |
+| `/usage` | Show bot cost/tokens, live OpenRouter usage and credits left |
 
-AI text, photos, variants and shelf ordering use Haiku 5.5 with medium effort. The route guides item placement, including neighboring categories. AI starts disabled to respect the user's OpenRouter credit restriction; exact commands and buttons still work. `/list` labels its fallback ordering while AI is disabled.
+AI text, photos, variants and shelf ordering use Haiku 5.5 with medium effort. The route guides item placement, including neighboring categories. The user approved production AI with $1/day and $5/month bot caps. New databases still seed AI disabled; cutover enables it explicitly. `/usage` reads provider usage and account credits without a model request.
 
 ## Local development
 
@@ -40,4 +40,4 @@ Coolify builds `Dockerfile` using `deploy/compose.yaml`, with one replica, 128 M
 
 Read [implementation](docs/implementation.md), [design](docs/design.md), [deployment](docs/deployment.md), [migration](docs/migration.md), and [verification results](docs/verification-report.md). The selected behavior settings live in SQLite; use the CLI to inspect or change them.
 
-Recorded live model behavior and total cost: [LLM results](docs/llm-results.md). The ingredient and photo continuations completed; shelf-ordering quality still needs work. See the report before enabling production AI.
+Recorded live model behavior and total cost: [LLM results](docs/llm-results.md). The ingredient and photo continuations completed; updated recorded checks place fresh herbs beside produce. See the report before enabling production AI.

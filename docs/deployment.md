@@ -4,7 +4,7 @@ Coolify builds the repository's pinned CGO Dockerfile through `/deploy/compose.y
 
 The app has no public domain or published port. Telegram polling uses outbound HTTPS; the health endpoint listens on container localhost port 8080. Compose sets one replica, UID 10001, read-only root, 128 MiB memory, 0.5 CPU, dropped capabilities and an 8 MiB `/tmp` filesystem. Go uses `GOMEMLIMIT=64MiB` and `GOMAXPROCS=1`.
 
-Set `TELEGRAM_BOT_TOKEN` and `OPENROUTER_API_KEY` as runtime variables, never build arguments. Set `RUN_MODE=paused` during setup and `active` at cutover. Google credentials are migration-only and do not enter the deployed app. Production AI remains disabled in SQLite until the user authorizes credits.
+Set `TELEGRAM_BOT_TOKEN` and `OPENROUTER_API_KEY` as runtime variables, never build arguments. Set `RUN_MODE=paused` during setup and `active` at cutover. Google credentials are migration-only and do not enter the deployed app. The user approved enabling production AI at cutover, with $1/day and $5/month caps.
 
 ## Persistence
 
@@ -40,3 +40,5 @@ tokencrypt run --with coolify_api_root_token -- python3 scripts/coolify.py statu
 `scripts/server` uses TokenCrypt's existing SSH passphrase grant. `scripts/coolify.py` provisions the app, uploads runtime secrets from the private `.env`, and requests deployment. It prints filtered metadata; HTTP error details stay in `.local/` for private inspection. Do not dump generated Compose files or container environments.
 
 On rollback, stop the Go app, reconcile post-cutover grocery changes, restore n8n service and publish its original workflow version. Do not restart the old bot concurrently with polling.
+
+The actual Coolify volume name is `1uqewh4rudhzcxwbvg8suqkq_groceriesbot-data`. Coolify prefixes the Compose volume with the application UUID; keep the app and volume stable across deployments. Compose build context is `.` because Coolify passes the repository root through `--project-directory`.

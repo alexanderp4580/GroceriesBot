@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/alexanderp4580/GroceriesBot/internal/grocery"
+	"github.com/alexanderp4580/GroceriesBot/internal/openrouter"
 	"strconv"
 	"strings"
 	"time"
@@ -79,8 +80,39 @@ func (b *Bot) command(ctx context.Context, u grocery.Update) ([]grocery.Outgoing
 		e := b.db.Cancel(ctx, u.ChatID, u.UserID)
 		return []grocery.Outgoing{text(u, "Cancelled.")}, e
 	case "/usage":
-		s, e := b.db.UsageSummary(ctx)
-		return []grocery.Outgoing{text(u, s)}, e
+		summary, e := b.db.UsageSummary(ctx)
+		if e != nil {
+			return nil, e
+		}
+		cfg, e := b.db.Settings(ctx)
+		if e != nil {
+			return nil, e
+		}
+		summary += fmt.Sprintf("\nBot limits: $%.2f/day, $%.2f/month", cfg.Float("llm.daily_budget_usd"), cfg.Float("llm.monthly_budget_usd"))
+		if reporter, ok := b.model.(interface {
+			Usage(context.Context) (openrouter.AccountUsage, error)
+		}); ok {
+			u, e := reporter.Usage(ctx)
+			if e != nil {
+				summary += "\n\nOpenRouter live usage unavailable; try again later."
+			} else {
+				summary += fmt.Sprintf("\n\nOpenRouter API-key usage\nToday: $%.4f\nThis month: $%.4f\nTotal: $%.4f", u.Daily, u.Monthly, u.Total)
+				if u.KeyRemaining != nil {
+					summary += fmt.Sprintf("\nAPI key allowance left: $%.4f", *u.KeyRemaining)
+				} else if u.KeyLimit == nil {
+					summary += "\nAPI key allowance: no per-key limit."
+				} else {
+					summary += "\nAPI key allowance unavailable."
+				}
+				if u.CreditsRemaining != nil {
+					summary += fmt.Sprintf("\nAccount credits left: $%.4f", *u.CreditsRemaining)
+				} else {
+					summary += "\nAccount credits unavailable for this key."
+				}
+			}
+		}
+		return []grocery.Outgoing{text(u, summary)}, nil
+
 	case "/save":
 		if arg == "" {
 			arg = "usual"

@@ -39,7 +39,7 @@ Clear and batch/photo additions require an initiating-user confirmation in the s
 
 Haiku receives the existing shop route as guidance and returns existing item IDs in shelf order, including cross-category adjacency. Go validates the complete ID set and preserves that order in text and buttons. SQLite caches it by revision and route/model fingerprint. Failed or disabled ordering produces a complete list with a visible fallback notice.
 
-The selected model is `anthropic/claude-haiku-5.5`, medium effort, with 4,096 total output tokens. This replaces the proposed 800-token limit so reasoning and tool arguments have room. Production starts with `llm.enabled=false` per the user's credit restriction. Fixture tests exercise AI behavior without OpenRouter requests.
+The selected model is `anthropic/claude-haiku-5.5`, medium effort, with 4,096 total output tokens. This replaces the proposed 800-token limit so reasoning and tool arguments have room. New databases seed `llm.enabled=false`. The user approved enabling production AI with $1/day and $5/month caps. Fixture tests make no paid requests; selected live tests retain raw responses and costs. `/usage` adds read-only key/account billing queries, showing account credits separately from the per-key allowance.
 
 ## Storage and deployment
 

@@ -5,7 +5,7 @@ RUN go mod download
 COPY cmd ./cmd
 COPY internal ./internal
 COPY migrations ./migrations
-RUN CGO_ENABLED=1 go build -trimpath -ldflags='-s -w' -o /out/groceriesbot ./cmd/groceriesbot
+RUN --mount=type=cache,target=/root/.cache/go-build CGO_ENABLED=1 go build -trimpath -ldflags='-s -w' -o /out/groceriesbot ./cmd/groceriesbot
 
 FROM docker.io/library/debian:bookworm-slim@sha256:a4672c0cb26fbdde88e38fa2dfb6c681942306680e41e4378b28770b6e79ee91
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates tzdata && rm -rf /var/lib/apt/lists/* && mkdir /data /app && chown 10001:10001 /data && chmod 700 /data

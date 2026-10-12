@@ -315,3 +315,20 @@ func TestCallbackAcknowledgedBeforeModelCompletes(t *testing.T) {
 		t.Fatal("callback ack waits for expensive model request", r, e)
 	}
 }
+
+type usageFixture struct{ fixtureModel }
+
+func (m *usageFixture) Usage(context.Context) (openrouter.AccountUsage, error) {
+	credit, key := .9827, 7.546
+	return openrouter.AccountUsage{Total: 2.454, Daily: .013, Monthly: .325, CreditsRemaining: &credit, KeyRemaining: &key}, nil
+}
+func TestUsageShowsLiveCreditsWithoutLLMSpend(t *testing.T) {
+	b, s, _ := fixture(t)
+	m := &usageFixture{}
+	b.model = m
+	send(t, b, s, grocery.Update{ID: 1, ChatID: -123, UserID: 8, Text: "/usage"})
+	r, e := s.NextReply(context.Background())
+	if e != nil || !strings.Contains(r.Message.Text, "Account credits left: $0.9827") || !strings.Contains(r.Message.Text, "API key allowance left: $7.5460") || m.Calls != 0 {
+		t.Fatal(r, e, m.Calls)
+	}
+}

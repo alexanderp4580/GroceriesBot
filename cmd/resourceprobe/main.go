@@ -78,6 +78,10 @@ func run() error {
 	var requests atomic.Int64
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests.Add(1)
+		if r.Method == "GET" {
+			json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"usage": 0, "usage_daily": 0, "usage_monthly": 0, "limit": nil, "limit_remaining": nil, "total_credits": 10, "total_usage": 0}})
+			return
+		}
 		body, e := io.ReadAll(io.LimitReader(r.Body, 6*1024*1024+1))
 		if e != nil || len(body) > 6*1024*1024 {
 			http.Error(w, "fixture body limit", 413)
@@ -135,6 +139,7 @@ func run() error {
 	s.SetSetting(ctx, "llm.enabled", json.RawMessage(`true`))
 	client := openrouter.New("fixture", srv.Client())
 	client.URL = srv.URL
+	client.AccountURL = srv.URL
 	t := &transport{photo: photo}
 	b := bot.New(s, t, client, "fixture")
 	var id int64
