@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 """Opt-in model recordings from the real processor in an isolated fixture DB."""
-import argparse,datetime,hashlib,json,os,sqlite3,subprocess,sys,urllib.request
+import argparse,datetime,hashlib,json,os,sqlite3,subprocess,sys,urllib.request,shutil
 from pathlib import Path
 from fetch_sheets import env_file
 ROOT=Path(__file__).resolve().parents[1]
-p=argparse.ArgumentParser();p.add_argument('--list',action='store_true');p.add_argument('--record',type=Path);p.add_argument('--allow-paid-model-calls',action='store_true');p.add_argument('--max-usd',type=float,default=.25);p.add_argument('--scenario',action='append',default=[]);p.add_argument('--resume',type=Path,help='Resume copied synthetic DBs from a prior capture, skipping initial prompts');a=p.parse_args()
+p=argparse.ArgumentParser();p.add_argument('--list',action='store_true');p.add_argument('--record',type=Path);p.add_argument('--allow-paid-model-calls',action='store_true');p.add_argument('--max-usd',type=float,default=.25);p.add_argument('--scenario',action='append',default=[]);p.add_argument('--resume',type=Path,help='Resume copied synthetic DBs from a prior capture, skipping initial prompts');p.add_argument('--image',type=Path,help='Use this exact PNG instead of the note fixture');a=p.parse_args()
 cases=json.loads((ROOT/'testdata/llm-scenarios.json').read_text());ids={c['id'] for c in cases}
 if set(a.scenario)-ids:p.error('unknown scenario selected')
 selected=[c for c in cases if not a.scenario or c['id'] in a.scenario]
@@ -13,6 +13,7 @@ if a.list:
  sys.exit(0)
 if not a.allow_paid_model_calls or not a.record or not 0<a.max_usd<=.25:p.error('capture requires an approval flag, new record path, and budget at most $0.25')
 if a.resume and not a.scenario:p.error('resume requires explicit scenario selection')
+if a.image and len(a.scenario)!=1:p.error('a custom image requires one explicitly selected scenario')
 os.umask(0o077);record=a.record.resolve();record.relative_to(ROOT);record.mkdir(parents=True,exist_ok=False)
 try:
  values=env_file(ROOT/'.env');model='anthropic/claude-haiku-5.5';resume_info=[];start_ids={}
@@ -38,12 +39,22 @@ try:
  with urllib.request.urlopen('https://openrouter.ai/api/v1/models',timeout=30) as r:metadata=json.load(r)
  entry=next(x for x in metadata['data'] if x['id']==model);(record/'model-metadata.json').write_text(json.dumps(entry,indent=2))
  from PIL import Image,ImageDraw,ImageFont
- image=Image.new('RGB',(700,300),'white');draw=ImageDraw.Draw(image);font=ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',30)
- draw.multiline_text((30,25),'Shopping note\n2 cartons oat milk\n1 sourdough loaf\n6 apples',font=font,fill='black',spacing=15);image.save(record/'grocery-note.png')
+ image_info=None
+ if a.image:
+  source_image=a.image.resolve();photo=source_image.read_bytes()
+  if len(photo)>4194304 or not photo.startswith(b'\x89PNG\r\n\x1a\n'):raise ValueError('fixture must be a PNG within the application photo limit')
+  with Image.open(source_image) as im:width,height=im.size;im.verify()
+  if width>8000 or height>8000:raise ValueError('photo exceeds provider dimension limit')
+  shutil.copyfile(source_image,record/'grocery-note.png')
+  image_info={'source':str(source_image.relative_to(ROOT)),'sha256':hashlib.sha256(photo).hexdigest(),'bytes':len(photo),'width':width,'height':height,'altered':False}
+ else:
+  image=Image.new('RGB',(700,300),'white');draw=ImageDraw.Draw(image);font=ImageFont.truetype('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',30)
+  draw.multiline_text((30,25),'Shopping note\n2 cartons oat milk\n1 sourdough loaf\n6 apples',font=font,fill='black',spacing=15);image.save(record/'grocery-note.png')
+
  relative=record.relative_to(ROOT);prices=[entry['pricing'],*entry['pricing'].get('overrides',[])]
  cfg={'Key':values['OPENROUTER_API_KEY'],'Record':str(relative),'MaxUSD':a.max_usd,'PromptPrice':max(float(x['prompt']) for x in prices),'CompletionPrice':max(float(x['completion']) for x in prices),'Model':model,'Only':a.scenario,'Resume':bool(a.resume),'StartIDs':start_ids}
  effective=[{**c,'steps':c['steps'][1:] if a.resume else c['steps']} for c in selected]
- manifest={'commit':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),'configuration':{k:v for k,v in cfg.items() if k!='Key'},'resume_source':str(a.resume) if a.resume else None,'resume_details':resume_info,'scenarios':effective}
+ manifest={'commit':subprocess.check_output(['git','rev-parse','HEAD'],cwd=ROOT,text=True).strip(),'configuration':{k:v for k,v in cfg.items() if k!='Key'},'resume_source':str(a.resume) if a.resume else None,'resume_details':resume_info,'image':image_info,'scenarios':effective}
  (record/'capture-manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
  with (record/'runner.log').open('w') as log:
   result=subprocess.run(['toolchain/run','go','run','./cmd/llmprobe'],cwd=ROOT,input=json.dumps(cfg),text=True,stdout=log,stderr=subprocess.STDOUT)

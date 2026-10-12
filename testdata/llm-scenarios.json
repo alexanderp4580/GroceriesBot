@@ -267,5 +267,22 @@
         "text": "Read my pending groceries, then add one carton of Oatly Barista only if it is missing."
       }
     ]
+  },
+  {
+    "id": "banana_phone",
+    "find_out": "Can Haiku identify one fruit in a slightly blurry phone-style photo, propose the right quantity, and add it only after confirmation? The input prompt does not name the fruit.",
+    "steps": [
+      {
+        "text": "Add the item shown in this photo to my shopping list.",
+        "photo": "phone-photo"
+      },
+      {
+        "confirm": true,
+        "fallback_text": "Yes, add one of the item you identified."
+      },
+      {
+        "confirm": true
+      }
+    ]
   }
 ]

@@ -59,8 +59,8 @@ func (r *recorder) write(n int, v any) error {
 	return os.WriteFile(filepath.Join(r.Path, fmt.Sprintf("request-%03d.json", n)), raw, 0600)
 }
 func (r *recorder) RoundTrip(req *http.Request) (*http.Response, error) {
-	raw, e := io.ReadAll(io.LimitReader(req.Body, 2*1024*1024+1))
-	if e != nil || len(raw) > 2*1024*1024 {
+	raw, e := io.ReadAll(io.LimitReader(req.Body, 6*1024*1024+1))
+	if e != nil || len(raw) > 6*1024*1024 {
 		return nil, errors.New("capture request exceeds limit")
 	}
 	var body struct {
@@ -70,7 +70,11 @@ func (r *recorder) RoundTrip(req *http.Request) (*http.Response, error) {
 	if json.Unmarshal(raw, &body) != nil || body.Model != r.Model || req.URL.Host != "openrouter.ai" {
 		return nil, errors.New("unexpected capture request")
 	}
-	allowance := float64(len(raw)+4096)*r.Prompt + float64(body.MaxTokens)*r.Completion
+	inputBound, e := captureInputBound(raw)
+	if e != nil {
+		return nil, e
+	}
+	allowance := float64(inputBound)*r.Prompt + float64(body.MaxTokens)*r.Completion
 	if r.Used+allowance > r.Budget {
 		return nil, errors.New("capture budget exhausted")
 	}

@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"github.com/alexanderp4580/GroceriesBot/internal/grocery"
 	"github.com/alexanderp4580/GroceriesBot/internal/sqlite"
@@ -10,6 +11,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -87,5 +89,35 @@ func TestScenarioSelectionDoesNotRepeatUnselectedCases(t *testing.T) {
 	}
 	if _, e = selectCases([]scenario{{ID: "photo"}}, []string{"typo"}); e == nil {
 		t.Fatal("unknown selection accepted")
+	}
+}
+func TestRecorderBudgetsPhotoByVisualTokensInsteadOfBase64Bytes(t *testing.T) {
+	photo, e := os.ReadFile("../../testdata/images/banana-phone-blurry.png")
+	if e != nil {
+		t.Fatal(e)
+	}
+	raw, e := json.Marshal(map[string]any{"model": "fixture", "max_tokens": 4096, "messages": []any{map[string]any{"role": "user", "content": []any{map[string]any{"type": "text", "text": "Add the item in this photo."}, map[string]any{"type": "image_url", "image_url": map[string]string{"url": "data:image/png;base64," + base64.StdEncoding.EncodeToString(photo)}}}}}})
+	if e != nil {
+		t.Fatal(e)
+	}
+	base := &fixtureTransport{Raw: `{"usage":{"cost":0.0005}}`}
+	r := &recorder{Base: base, Path: t.TempDir(), Budget: .005, Prompt: .0000001, Completion: .0000005, Model: "fixture"}
+	req, _ := http.NewRequest("POST", "https://openrouter.ai/api/v1/chat/completions", bytes.NewReader(raw))
+	response, e := r.RoundTrip(req)
+	if e != nil {
+		t.Fatal("valid photo rejected:", e)
+	}
+	response.Body.Close()
+	captured, e := os.ReadFile(filepath.Join(r.Path, "request-001.json"))
+	var entry struct {
+		Request json.RawMessage `json:"request"`
+	}
+	if e != nil || json.Unmarshal(captured, &entry) != nil || !bytes.Equal(entry.Request, raw) {
+		var a, b any
+		json.Unmarshal(entry.Request, &a)
+		json.Unmarshal(raw, &b)
+		if !reflect.DeepEqual(a, b) {
+			t.Fatal("recording changed the actual photo request", e)
+		}
 	}
 }
