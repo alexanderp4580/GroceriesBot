@@ -8,6 +8,6 @@ Keep `.env`, `data/`, `.local/`, credentials, and real sheet rows out of Git and
 
 Coolify must mount the full `/data` directory. Keep the DB, WAL, SHM, and process lock there. Run one replica and prevent overlap during redeploys. Production Telegram switching is a separate action from project setup.
 
-Current scope: imported data, SQL schema, configuration, documentation, and deployment contract. The Telegram Go runtime has not been implemented. Do not describe the project as a running bot until its runtime and production checks pass.
+The user authorized implementation, GitHub push, Coolify deployment and cutover. Production AI must stay disabled until the user authorizes OpenRouter spend. Use fixture providers for verification; do not perform live model probes. Keep the old n8n workflow recoverable.
 
 Use the stop-slop skill for prose. Verify changes before claiming success. Migration checks: `python3 -m unittest discover -s tests -v`. Add Go checks as runtime packages become available.

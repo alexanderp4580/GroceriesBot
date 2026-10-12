@@ -11,3 +11,6 @@ tests
 *.db
 *-wal
 *-shm
+
+.worktrees
+.superpowers

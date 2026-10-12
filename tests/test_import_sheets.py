@@ -1,4 +1,5 @@
 import json
+import os
 import sqlite3
 import tempfile
 import unittest
@@ -79,6 +80,27 @@ class ImportTest(unittest.TestCase):
             import_snapshot(changed, self.db, -123)
         with sqlite3.connect(self.db) as db:
             self.assertEqual(db.execute('SELECT name FROM groceries ORDER BY id LIMIT 1').fetchone()[0], 'Oat milk')
+
+    def test_empty_or_wrong_source_is_rejected_before_writing(self):
+        for data in [[], fixture()]:
+            if data:
+                data[0]['sheets'][0]['properties']['title'] = 'Renamed tab'
+            with self.assertRaises(ValueError):
+                import_snapshot(data, self.db, -123)
+        self.assertFalse(self.db.exists())
+
+    def test_duplicate_headers_rejected_and_process_mask_preserved(self):
+        data = fixture()
+        data[0]['sheets'][0]['data'][0]['rowData'][0]['values'].append(cell('Name'))
+        with self.assertRaises(ValueError):
+            import_snapshot(data, self.db, -123)
+        previous = os.umask(0o027)
+        try:
+            import_snapshot(fixture(), self.db, -123)
+            actual = os.umask(0o027)
+            self.assertEqual(actual, 0o027)
+        finally:
+            os.umask(previous)
 
     def test_invalid_dates_stay_in_source_and_runtime_state_uses_same_database(self):
         data = fixture()

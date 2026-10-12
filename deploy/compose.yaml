@@ -1,8 +1,9 @@
-# Deployment contract for the Go runtime described in docs/implementation.md.
-# Supply its built image after implementing and testing that runtime.
 services:
   groceriesbot:
-    image: ${GROCERIESBOT_IMAGE:?Set the tested GroceriesBot image reference}
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: groceriesbot:local
     user: "10001:10001"
     restart: unless-stopped
     init: true
@@ -17,7 +18,7 @@ services:
       - ALL
     environment:
       TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?Set the bot token in Coolify}
-      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:?Set the OpenRouter key in Coolify}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
       DATABASE_PATH: /data/groceriesbot.sqlite3
       RUN_MODE: ${RUN_MODE:-paused}
       GOMEMLIMIT: 64MiB

@@ -11,27 +11,7 @@ from pathlib import Path
 from zoneinfo import ZoneInfo
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_SETTINGS = {
-    'llm.model': 'anthropic/claude-haiku-5.5',
-    'llm.reasoning_effort': 'medium',
-    'llm.max_tool_rounds': 6,
-    'llm.max_output_tokens': 800,
-    'llm.timeout_seconds': 30,
-    'llm.context_max_chars': 12000,
-    'memory.max_messages_per_chat': 20,
-    'memory.max_age_days': 30,
-    'telegram.poll_timeout_seconds': 50,
-    'telegram.allowed_user_ids': [],
-    'photos.max_bytes': 4194304,
-    'updates.retention_days': 30,
-    'confirm.expiry_seconds': 300,
-    'display.time_zone': 'Europe/Amsterdam',
-    'list.category_order': ['Quick / ready food','Vegetables','Fruits','Vegan','Meat','Fish','Bread','Pantry','Candy','Bakery','Dairy','Household','Pharmacy','Drinks'],
-    'list.ordering_mode': 'llm',
-    'list.max_context_items': 200,
-    'history.max_suggestions': 20,
-    'processing.timeout_seconds': 120,
-}
+DEFAULT_SETTINGS = json.loads((ROOT/'migrations/defaults.json').read_text())
 
 
 def dumps(value):
@@ -81,9 +61,24 @@ def summary(db, already=False):
 
 
 def import_snapshot(books, database_path, chat_id):
-    os.umask(0o077)
+    if not books or not chat_id:
+        raise ValueError('Expected spreadsheet and chat identity')
+    grocery_tabs = [s for b in books for s in b.get('sheets', []) if s.get('properties', {}).get('title') == 'Groceries']
+    if not grocery_tabs:
+        raise ValueError('Expected Groceries tab is missing')
+    required = {'ID','Name','Category','Quantity','Added DateTime','Purchase DateTime'}
+    for tab in grocery_tabs:
+        rows = [r for block in tab.get('data', []) for r in block.get('rowData', [])
+                if any(value(c) != '' for c in r.get('values', []))]
+        if not rows:
+            raise ValueError('Groceries header is missing')
+        names = [str(value(c)).strip() for c in rows[0].get('values', [])]
+        if not required.issubset(names) or any(names.count(k) != 1 for k in required):
+            raise ValueError('Groceries headers are missing or duplicated')
     path = Path(database_path)
-    path.parent.mkdir(parents=True,exist_ok=True)
+    path.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
+    fd = os.open(path, os.O_CREAT | os.O_RDWR, 0o600)
+    os.close(fd)
     payload = dumps(books).encode()
     digest = hashlib.sha256(payload).hexdigest()
     now = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
@@ -177,6 +172,7 @@ def import_snapshot(books, database_path, chat_id):
 
 
 if __name__ == '__main__':
+    os.umask(0o077)
     parser = argparse.ArgumentParser(description='Import a private Sheets JSON snapshot into SQLite')
     parser.add_argument('snapshot',type=Path)
     parser.add_argument('--database',type=Path,default=ROOT/'data/groceriesbot.sqlite3')
