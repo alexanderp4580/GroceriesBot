@@ -36,3 +36,15 @@ func TestTruncatedCallsRejected(t *testing.T) {
 		t.Fatal("accepted truncated response")
 	}
 }
+func TestMissingProviderCostIsNotInvented(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"choices":[{"finish_reason":"stop","message":{"role":"assistant","content":"done"}}],"usage":{"prompt_tokens":1000,"completion_tokens":500}}`))
+	}))
+	defer srv.Close()
+	c := New("fixture", srv.Client())
+	c.URL = srv.URL
+	r, e := c.Complete(context.Background(), Request{})
+	if e != nil || r.Usage.Cost != 0 || r.Usage.CostKnown {
+		t.Fatal("invented usage cost", r, e)
+	}
+}

@@ -78,6 +78,11 @@ func (b *Bot) Process(ctx context.Context, u grocery.Update) error {
 	if e = b.db.Claim(ctx, u.ID); e != nil {
 		return e
 	}
+	if u.CallbackID != "" {
+		if e = b.db.QueueCallbackAnswer(ctx, u); e != nil {
+			return e
+		}
+	}
 	ctx, cancel := context.WithTimeout(ctx, time.Duration(cfg.Int("processing.timeout_seconds"))*time.Second)
 	defer cancel()
 	var out []grocery.Outgoing
@@ -102,9 +107,6 @@ func (b *Bot) Process(ctx context.Context, u grocery.Update) error {
 			msg += fmt.Sprintf("\n%d action(s) were saved. Use /list to check or /undo.", n)
 		}
 		out = []grocery.Outgoing{text(u, msg)}
-	}
-	if u.CallbackID != "" {
-		out = append([]grocery.Outgoing{{Method: "answerCallbackQuery", ChatID: u.ChatID, CallbackID: u.CallbackID, Text: ""}}, out...)
 	}
 	memory := ""
 	expanded := []grocery.Outgoing{}

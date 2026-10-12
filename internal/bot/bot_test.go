@@ -267,3 +267,51 @@ func TestPurchaseRetainsCachedShelfOrderWithoutModelRequest(t *testing.T) {
 		t.Fatal("purchase changed cached order or spent credits", out, m.Calls, e)
 	}
 }
+
+type heldModel struct{ entered, release chan struct{} }
+
+func (m *heldModel) Complete(ctx context.Context, r openrouter.Request) (openrouter.Response, error) {
+	close(m.entered)
+	select {
+	case <-m.release:
+		return openrouter.Response{Message: openrouter.Message{Role: "assistant", Content: `{"ordered_ids":[2,1]}`}}, nil
+	case <-ctx.Done():
+		return openrouter.Response{}, ctx.Err()
+	}
+}
+func TestCallbackAcknowledgedBeforeModelCompletes(t *testing.T) {
+	b, s, _ := fixture(t)
+	ctx := context.Background()
+	send(t, b, s, grocery.Update{ID: 1, ChatID: -123, UserID: 8, Text: "/add Bread"})
+	send(t, b, s, grocery.Update{ID: 2, ChatID: -123, UserID: 8, Text: "/add Oat milk"})
+	for {
+		r, e := s.NextReply(ctx)
+		if sqlite.IsEmpty(e) {
+			break
+		}
+		if e != nil {
+			t.Fatal(e)
+		}
+		s.Sent(ctx, r, 10)
+	}
+	s.SetSetting(ctx, "llm.enabled", json.RawMessage(`true`))
+	m := &heldModel{make(chan struct{}), make(chan struct{})}
+	b.model = m
+	u := grocery.Update{ID: 3, ChatID: -123, UserID: 8, CallbackID: "fixture-cb", CallbackData: b.callback("page", 0, -123, 0), MessageID: 10}
+	s.Accept(ctx, []grocery.Update{u}, 4)
+	done := make(chan error, 1)
+	go func() { done <- b.Process(ctx, u) }()
+	select {
+	case <-m.entered:
+	case <-time.After(time.Second):
+		t.Fatal("model not started")
+	}
+	r, e := s.NextReply(ctx)
+	close(m.release)
+	if err := <-done; err != nil {
+		t.Fatal(err)
+	}
+	if e != nil || r.Message.Method != "answerCallbackQuery" {
+		t.Fatal("callback ack waits for expensive model request", r, e)
+	}
+}

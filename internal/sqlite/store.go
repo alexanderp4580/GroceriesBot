@@ -528,3 +528,9 @@ func (s *Store) ShoppingMessage(ctx context.Context, chat int64) (int64, error) 
 	}
 	return id, e
 }
+
+func (s *Store) QueueCallbackAnswer(ctx context.Context, u grocery.Update) error {
+	out := grocery.Outgoing{Method: "answerCallbackQuery", ChatID: u.ChatID, CallbackID: u.CallbackID}
+	_, e := s.db.ExecContext(ctx, "INSERT OR IGNORE INTO outbox(update_id,chat_id,sequence,payload_json,created_at) VALUES(?,?,-1,?,?)", u.ID, u.ChatID, encoded(out), stamp(time.Now()))
+	return e
+}

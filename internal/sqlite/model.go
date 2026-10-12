@@ -11,6 +11,7 @@ import (
 )
 
 type Usage struct {
+	CostKnown  bool
 	Prompt     int
 	Completion int
 	Reasoning  int
@@ -61,7 +62,7 @@ func (s *Store) Reserve(ctx context.Context, key string) error {
 	return tx.Commit()
 }
 func (s *Store) RecordUsage(ctx context.Context, key string, u Usage) error {
-	_, e := s.db.ExecContext(ctx, "UPDATE llm_usage SET state='completed',prompt_tokens=?,completion_tokens=?,reasoning_tokens=?,cost_micros=?,reserved_micros=0,latency_ms=? WHERE request_key=?", u.Prompt, u.Completion, u.Reasoning, int64(math.Round(u.Cost*1e6)), u.LatencyMS, key)
+	_, e := s.db.ExecContext(ctx, "UPDATE llm_usage SET state='completed',prompt_tokens=?,completion_tokens=?,reasoning_tokens=?,cost_micros=?,reserved_micros=CASE WHEN ? THEN 0 ELSE reserved_micros END,latency_ms=? WHERE request_key=?", u.Prompt, u.Completion, u.Reasoning, int64(math.Round(u.Cost*1e6)), u.CostKnown, u.LatencyMS, key)
 	return e
 }
 func (s *Store) UsageSummary(ctx context.Context) (string, error) {

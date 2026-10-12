@@ -272,3 +272,19 @@ func TestTerminalDeliveryFailureIsPruned(t *testing.T) {
 		t.Fatal("terminal delivery retained indefinitely")
 	}
 }
+func TestMissingCostKeepsBudgetReservation(t *testing.T) {
+	s := openTest(t)
+	ctx := context.Background()
+	s.SetSetting(ctx, "llm.enabled", json.RawMessage(`true`))
+	if e := s.Reserve(ctx, "unknown"); e != nil {
+		t.Fatal(e)
+	}
+	if e := s.RecordUsage(ctx, "unknown", Usage{Prompt: 1000, Completion: 500}); e != nil {
+		t.Fatal(e)
+	}
+	var reserve int
+	s.db.QueryRow("SELECT reserved_micros FROM llm_usage WHERE request_key='unknown'").Scan(&reserve)
+	if reserve != 50000 {
+		t.Fatal("unknown bill released conservative allowance")
+	}
+}

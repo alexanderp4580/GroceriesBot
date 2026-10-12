@@ -59,7 +59,7 @@ func (b *Bot) call(ctx context.Context, u grocery.Update, round int, r openroute
 	if e != nil {
 		return response, e
 	}
-	if e = b.db.RecordUsage(ctx, requestKey, sqlite.Usage{Prompt: response.Usage.Prompt, Completion: response.Usage.Completion, Reasoning: response.Usage.Reasoning, Cost: response.Usage.Cost, LatencyMS: response.Usage.LatencyMS}); e != nil {
+	if e = b.db.RecordUsage(ctx, requestKey, sqlite.Usage{CostKnown: response.Usage.CostKnown, Prompt: response.Usage.Prompt, Completion: response.Usage.Completion, Reasoning: response.Usage.Reasoning, Cost: response.Usage.Cost, LatencyMS: response.Usage.LatencyMS}); e != nil {
 		return response, e
 	}
 	if persist {

@@ -39,8 +39,9 @@ type Request struct {
 	JSON      bool
 }
 type Usage struct {
-	Prompt     int `json:"prompt_tokens"`
-	Completion int `json:"completion_tokens"`
+	CostKnown  bool `json:"cost_known,omitempty"`
+	Prompt     int  `json:"prompt_tokens"`
+	Completion int  `json:"completion_tokens"`
 	Details    struct {
 		Reasoning int `json:"reasoning_tokens"`
 	} `json:"completion_tokens_details"`
@@ -108,8 +109,14 @@ func (c *Client) Complete(ctx context.Context, r Request) (Response, error) {
 	}
 	out.Usage.Reasoning = out.Usage.Details.Reasoning
 	out.Usage.LatencyMS = time.Since(start).Milliseconds()
-	if out.Usage.Cost == 0 {
-		out.Usage.Cost = (float64(out.Usage.Prompt)*0.1 + float64(out.Usage.Completion)*0.5) / 1e6
+	var billed struct {
+		Usage struct {
+			Cost *float64 `json:"cost"`
+		} `json:"usage"`
 	}
+	if json.Unmarshal(b, &billed) == nil && billed.Usage.Cost != nil && *billed.Usage.Cost >= 0 {
+		out.Usage.CostKnown = true
+	}
+
 	return Response{Message: out.Choices[0].Message, Usage: out.Usage}, nil
 }
