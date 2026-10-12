@@ -1,30 +1,31 @@
 # Verification results
 
-2026-10-12. Ran `python3 scripts/verify.py --record .local/verification/reviewed-build-1 --containers` once against runtime commit `fee07ec`.
+Release candidate `436cfe8`, 2026-10-12. Ran the recorded verification once in `.local/verification/release-candidate-1/`: tracked-file secret scan, seven Python migration tests, Go race tests, vet, compilation, pinned image build and synthetic container checks all passed.
 
-| Check | Result |
-| --- | --- |
-| Tracked-file secret scan | Passed |
-| Python migration tests | 7 passed |
-| Go tests with race detection, cache disabled | Passed across packages |
-| Go vet | Passed |
-| Go compilation | Passed |
-| Pinned container image build | Passed |
-| Container policy | UID 10001, read-only root, 128 MiB limit |
-| Container recreation | Groceries, memory and settings persisted |
-| Overlapping instance | Second process rejected by the data lock |
-| Paused mode | Network disabled for the container check; AI remained false |
+The container checks verified UID 10001, a read-only root, a 128 MiB limit, persistence of groceries/memory/settings across recreation, and rejection of an overlapping process through the data lock. Fixture providers made no production model requests.
 
-Full stdout/stderr and exit codes: `.local/verification/reviewed-build-1/`. The image ID is `1b33b20a90075390d3bf646f6e0cfe3cdc30a78d740383903aa2ef47a7d64df1`. Podman reported that OCI format ignores the image-level health declaration; the Compose file supplies its own healthcheck, and the verification script executed the health command.
+## Coolify and migration
 
-The independent review found five important issues. Regression tests reproduced and verified fixes for clarification provenance/reuse, large-list clearing/capacity, retry ordering and grocery-tool context bounds. Another regression verified confirmation replay after a committed mutation.
+Coolify deployed the release and started active Telegram polling. The first deployment failed because its Compose build context resolved outside the repository; context `.` corrected that failure. Later deployments completed. Runtime variables hold credentials; the image contains no credentials or imported rows.
 
-Actual Haiku tests cost $0.0079504 for 29 requests across 14 scenarios. See [llm-results.md](llm-results.md) for recorded behavior and incomplete flows. Fixture success does not establish live AI readiness.
+The final Sheets snapshot imported 29 groceries, including six pending and 23 purchased, from 30 source rows. Snapshot compression/digest checks, SQLite integrity and foreign keys passed, with zero import issues. Private source and DB files remain in `.local/`. Production uses `1uqewh4rudhzcxwbvg8suqkq_groceriesbot-data` mounted at `/data`, UID 10001, mode 0600.
 
-Coolify deployment and ten-minute host resource measurements have not run. The user redirected the task to recorded tests and cost reporting. No production workflow, webhook or container changed.
+The n8n grocery workflow was unpublished and its service stopped after confirming zero unfinished grocery executions. Its data and workflow version remain available for rollback. Telegram webhook removal preserved queued updates. Production AI is enabled with Haiku 5.5, medium effort, and $1/day and $5/month bot caps.
 
-## Follow-up verification
+Administrative inbox smoke commands `/list` and `/usage` delivered actual Telegram messages 771 and 772 to RAGroceries. They used the bot's own actor identity, not a fabricated human Telegram update. Grocery rows remained unchanged. The list required one shelf-order request costing $0.000248; `/usage` fetched live key usage and account credits without a model completion.
 
-Recorded race-suite output for the runner fixes is in `.local/verification/flow-runner-fix/` and `.local/verification/banana-probe/`. Both suites passed. New regressions cover following actual clarification labels, replying to text-only proposals, selecting only requested scenarios, and preserving a full-size PNG while estimating image cost from visual tokens instead of base64 text bytes.
+After restarting the live container, all 29 groceries, four conversation messages, two update records, two delivery records and the settings digest persisted. The readiness endpoint returned HTTP 200. Records: `.local/verification/active-initial.log`, `readonly-smoke.log`, `restart-measure.log` and remote `/root/groceriesbot-verification/`.
 
-Two saved-conversation continuations and the generated banana photo completed with application confirmation. `scripts/check_recorded_flows.py` compares the final rows with the actual recorded proposal, checks zero insertions before confirmation and confirms consumed pending state. Total OpenRouter cost is $0.0103365. See [llm-results.md](llm-results.md).
+The user requested removal of the old n8n suggestion keyboard. Telegram accepted a `remove_keyboard` message, ID 773.
+
+## Resource measurements
+
+A fixture workload ran on the Coolify host under the production 128 MiB / 0.5 CPU limits. It processed 76 updates, delivered 83 messages, retained 20 conversation messages and ended with 123 pending items. The four-MiB photo buffer used the recorded banana response through a local fixture provider. Peak process RSS was 54.68 MiB. The fixture made zero actual OpenRouter requests. Record: `.local/verification/resource-workload-1.log`.
+
+The ten-minute active polling measurement is running. This workload measurement measures resource use; the separate recorded banana test establishes actual model behavior.
+
+## Model testing cost
+
+Recorded live scenarios cost $0.0129009 for 42 requests. The deployed read-only list smoke added $0.000248, giving **$0.0131489** in test/model verification cost. Provider ledger amounts retain more precision than the bot's micro-dollar ledger. No additional model probes were run for deployment. See [LLM results](llm-results.md).
+
+These are individual recorded flows, not a repeated-run reliability estimate. The final independent release review is pending.

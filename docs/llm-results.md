@@ -52,3 +52,9 @@ The user caption was “Add the item shown in this photo to my shopping list.”
 The two requests cost **$0.0008273**. Total OpenRouter testing cost across the initial scenarios, two continuations and banana photo: **$0.0103365** for 33 requests. This total covers OpenRouter calls; the built-in image tool did not expose a separate generation price. Raw records and checks: `.local/llm-results/banana-phone-1/`.
 
 The ingredients and photo flows have now completed in recorded continuations. Shelf-adjacency quality and language/category consistency still need work; these results do not claim production deployment or repeated-run reliability.
+
+## Release prompt checks
+
+Recorded five targeted scenarios after updating shelf-location, response-language and canonical-category context. Nine requests cost $0.0025644. The explicit Oatly addition, quantity reset and confirmed batch used English replies and configured category labels. The photo produced a direct application confirmation. Shelf ordering returned `[3,1,2,4,5,6]`, placing fresh basil beside tomatoes and apples, followed by oat/cow milk and household items. A second list reused the saved order without another model request.
+
+Private recordings: `.local/llm-results/deploy-behavior-1/`. These observations address the earlier language and shelf-adjacency findings in these examples. They do not establish reliability across shops or products. Cumulative recorded scenario spend: **$0.0129009**, 42 requests. The production `/list` smoke added $0.000248; cumulative verification spend is **$0.0131489**. `/usage` key/credits GET requests made no model call.
