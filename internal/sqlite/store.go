@@ -447,7 +447,7 @@ func (s *Store) Recent(ctx context.Context, chat int64, limit int) ([]map[string
 func (s *Store) NextReply(ctx context.Context) (grocery.Reply, error) {
 	var r grocery.Reply
 	var b string
-	e := s.db.QueryRowContext(ctx, "SELECT id,attempts,payload_json FROM outbox WHERE state='pending' AND (available_at IS NULL OR available_at<=?) ORDER BY id LIMIT 1", stamp(time.Now())).Scan(&r.ID, &r.Attempts, &b)
+	e := s.db.QueryRowContext(ctx, "SELECT id,attempts,payload_json FROM outbox o WHERE state='pending' AND (available_at IS NULL OR available_at<=?) AND NOT EXISTS (SELECT 1 FROM outbox earlier WHERE earlier.chat_id=o.chat_id AND earlier.id<o.id AND earlier.state='pending') ORDER BY id LIMIT 1", stamp(time.Now())).Scan(&r.ID, &r.Attempts, &b)
 	if e == nil {
 		e = json.Unmarshal([]byte(b), &r.Message)
 	}

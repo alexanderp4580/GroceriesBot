@@ -90,9 +90,10 @@ func (i inputItem) item() (grocery.Item, error) {
 }
 
 type clarification struct {
-	Original string   `json:"original"`
-	Question string   `json:"question"`
-	Options  []string `json:"options"`
+	ConfirmRequired bool     `json:"confirm_required"`
+	Original        string   `json:"original"`
+	Question        string   `json:"question"`
+	Options         []string `json:"options"`
 }
 
 func tools() []openrouter.Tool {
@@ -159,8 +160,13 @@ func (b *Bot) converse(ctx context.Context, u grocery.Update, cfg config.Setting
 		}
 		input += "\nReplying to (data): " + reply
 	}
-	if p, pe := b.db.PendingAction(ctx, u.ChatID, u.UserID); pe == nil && p.Kind == "clarify" && p.ExpiresAt > time.Now().UTC().Format(time.RFC3339) {
+	if p, pe := b.db.TakeClarification(ctx, u, 0, time.Now()); pe == nil {
 		input += "\nYour pending clarification (data): " + string(p.Payload)
+		var a clarification
+		if decode(p.Payload, &a) != nil {
+			return nil, errors.New("invalid clarification state")
+		}
+		u.ConfirmRequired = u.ConfirmRequired || a.ConfirmRequired
 	}
 	var inputContent any = input
 	if u.PhotoID != "" {
@@ -251,8 +257,16 @@ func (b *Bot) execute(ctx context.Context, u grocery.Update, k grocery.ActionKey
 		if e != nil {
 			return "", nil, false, e
 		}
+		cfg, e := b.db.Settings(ctx)
+		if e != nil {
+			return "", nil, false, e
+		}
+		total := len(xs)
+		if len(xs) > cfg.Int("list.max_context_items") {
+			xs = xs[:cfg.Int("list.max_context_items")]
+		}
 		hist, e := b.db.History(ctx, u.ChatID)
-		r, _ := json.Marshal(map[string]any{"pending": xs, "history": hist})
+		r, _ := json.Marshal(map[string]any{"pending": xs, "history": hist, "total_pending": total, "truncated": total > len(xs)})
 		return string(r), nil, false, e
 	case "show_list":
 		if e := decode(raw, &struct{}{}); e != nil {
@@ -276,7 +290,7 @@ func (b *Bot) execute(ctx context.Context, u grocery.Update, k grocery.ActionKey
 				return "", nil, false, errors.New("invalid option")
 			}
 		}
-		p, e := b.db.Prepare(ctx, k, u.ChatID, u.UserID, "clarify", clarification{u.Text, a.Question, a.Options}, time.Now())
+		p, e := b.db.Prepare(ctx, k, u.ChatID, u.UserID, "clarify", clarification{u.ConfirmRequired || u.PhotoID != "" || inferredRequest(u.Text), u.Text, a.Question, a.Options}, time.Now())
 		if e != nil {
 			return "", nil, false, e
 		}
@@ -312,7 +326,7 @@ func (b *Bot) execute(ctx context.Context, u grocery.Update, k grocery.ActionKey
 		if len(op.Items) == 0 || len(op.Items) > 100 {
 			return "", nil, false, errors.New("invalid number of items")
 		}
-		if a.Confirm || u.PhotoID != "" || len(op.Items) > 1 || inferredRequest(u.Text) {
+		if a.Confirm || u.ConfirmRequired || u.PhotoID != "" || len(op.Items) > 1 || inferredRequest(u.Text) {
 			p, e := b.db.Prepare(ctx, k, u.ChatID, u.UserID, "confirm_add", op.Items, time.Now())
 			s := "Add these items?"
 			for _, i := range op.Items {

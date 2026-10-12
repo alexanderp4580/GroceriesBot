@@ -159,10 +159,11 @@ func (b *Bot) handleCallback(ctx context.Context, u grocery.Update) ([]grocery.O
 			if e != nil {
 				return nil, errors.New("invalid choice")
 			}
-			p, e := b.db.PendingAction(ctx, u.ChatID, u.UserID)
-			if e != nil || p.ID != id || p.ExpiresAt <= time.Now().UTC().Format(time.RFC3339) {
-				return nil, errors.New("question expired")
+			p, e := b.db.TakeClarification(ctx, u, id, time.Now())
+			if e != nil {
+				return nil, errors.New("question expired or already answered")
 			}
+
 			var a clarification
 			if decode(p.Payload, &a) != nil || n < 0 || n >= len(a.Options) {
 				return nil, errors.New("invalid choice")
@@ -181,6 +182,15 @@ func (b *Bot) handleCallback(ctx context.Context, u grocery.Update) ([]grocery.O
 	return nil, errors.New("unknown button")
 }
 func (b *Bot) confirm(ctx context.Context, u grocery.Update, id int64) ([]grocery.Outgoing, error) {
+	if op, r, e := b.db.Action(ctx, key(u)); e == nil {
+		if op.ChatID != u.ChatID || op.UserID != u.UserID || op.ConfirmationID != id || (op.Kind != "confirm_add" && op.Kind != "clear") {
+			return nil, errors.New("invalid confirmation replay")
+		}
+		return b.afterMutation(ctx, u, r.Text)
+	} else if !sqlite.IsEmpty(e) {
+		return nil, e
+	}
+
 	p, e := b.db.PendingAction(ctx, u.ChatID, u.UserID)
 	if e != nil || p.ID != id {
 		return nil, errors.New("confirmation expired")

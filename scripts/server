@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+exec tokencrypt run --with deck_ssh_passphrase_hetzner -- env SSH_ASKPASS="$ROOT/scripts/askpass.py" SSH_ASKPASS_REQUIRE=force DISPLAY=:0 setsid -w ssh -o BatchMode=no -p 22666 -i /home/deck/.ssh/hetzner root@100.101.177.10 "$@"

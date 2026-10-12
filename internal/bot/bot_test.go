@@ -7,6 +7,7 @@ import (
 	"github.com/alexanderp4580/GroceriesBot/internal/openrouter"
 	"github.com/alexanderp4580/GroceriesBot/internal/sqlite"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -172,5 +173,63 @@ func TestMalformedArgumentsAndZeroQuantity(t *testing.T) {
 		if e == nil {
 			t.Fatal(raw)
 		}
+	}
+}
+func TestPhotoClarificationKeepsConfirmationAndCannotReuseChoice(t *testing.T) {
+	b, s, m := fixture(t)
+	ctx := context.Background()
+	s.SetSetting(ctx, "llm.enabled", json.RawMessage(`true`))
+	m.Responses = []openrouter.Response{{Message: openrouter.Message{Role: "assistant", ToolCalls: []openrouter.ToolCall{{ID: "a", Function: openrouter.Function{Name: "ask", Arguments: `{"question":"Which milk?","options":["Oat milk"]}`}}}}}, {Message: openrouter.Message{Role: "assistant", ToolCalls: []openrouter.ToolCall{{ID: "b", Function: openrouter.Function{Name: "add_items", Arguments: `{"items":[{"name":"Oat milk"}]}`}}}}}, {Message: openrouter.Message{Role: "assistant", Content: "done"}}}
+	send(t, b, s, grocery.Update{ID: 1, ChatID: -123, UserID: 8, Text: "milk", PhotoID: "photo"})
+	p, _ := s.PendingAction(ctx, -123, 8)
+	cb := b.callback("choice0", p.ID, -123, 8)
+	send(t, b, s, grocery.Update{ID: 2, ChatID: -123, UserID: 8, CallbackID: "a", CallbackData: cb})
+	xs, _ := s.Pending(ctx, -123)
+	if len(xs) != 0 {
+		t.Fatal("photo inserted without confirmation")
+	}
+	pending, _ := s.PendingAction(ctx, -123, 8)
+	if pending.Kind != "confirm_add" {
+		t.Fatal(pending)
+	}
+	calls := m.Calls
+	send(t, b, s, grocery.Update{ID: 3, ChatID: -123, UserID: 8, CallbackID: "b", CallbackData: cb})
+	if m.Calls != calls {
+		t.Fatal("reused resolved clarification")
+	}
+}
+func TestGroceryToolContextLimit(t *testing.T) {
+	b, s, _ := fixture(t)
+	ctx := context.Background()
+	for n := 0; n < 201; n++ {
+		id := int64(n + 1)
+		s.Accept(ctx, []grocery.Update{{ID: id, ChatID: -123, UserID: 8}}, id+1)
+		s.Apply(ctx, grocery.ActionKey{UpdateID: id}, grocery.Operation{Kind: "add", ChatID: -123, UserID: 8, Items: []grocery.Item{{Name: "Fixture", Quantity: 1}}}, time.Now())
+	}
+	result, _, _, e := b.execute(ctx, grocery.Update{ID: 1, ChatID: -123, UserID: 8}, grocery.ActionKey{UpdateID: 1}, openrouter.ToolCall{Function: openrouter.Function{Name: "get_groceries", Arguments: `{}`}})
+	var a struct {
+		Pending []grocery.Item `json:"pending"`
+	}
+	json.Unmarshal([]byte(result), &a)
+	if e != nil || len(a.Pending) > 200 {
+		t.Fatal(len(a.Pending), e)
+	}
+}
+func TestConfirmedMutationReplaysAfterCrash(t *testing.T) {
+	b, s, _ := fixture(t)
+	ctx := context.Background()
+	send(t, b, s, grocery.Update{ID: 1, ChatID: -123, UserID: 8, Text: "/usual"})
+	seed := grocery.Update{ID: 2, ChatID: -123, UserID: 8}
+	s.Accept(ctx, []grocery.Update{seed}, 3)
+	p, e := s.Prepare(ctx, grocery.ActionKey{UpdateID: 2}, -123, 8, "confirm_add", []grocery.Item{{Name: "Milk", Quantity: 1}}, time.Now())
+	if e != nil {
+		t.Fatal(e)
+	}
+	u := grocery.Update{ID: 3, ChatID: -123, UserID: 8, CallbackID: "confirm", CallbackData: b.callback("confirm", p.ID, -123, 8)}
+	s.Accept(ctx, []grocery.Update{u}, 4)
+	s.Apply(ctx, key(u), grocery.Operation{Kind: "confirm_add", ChatID: -123, UserID: 8, ConfirmationID: p.ID}, time.Now())
+	out, e := b.handleCallback(ctx, u)
+	if e != nil || len(out) == 0 || !strings.Contains(out[0].Text, "Added") {
+		t.Fatal(out, e)
 	}
 }

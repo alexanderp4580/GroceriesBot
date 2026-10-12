@@ -39,15 +39,16 @@ type Result struct {
 	Text  string `json:"text"`
 }
 type Update struct {
-	ID           int64  `json:"id"`
-	ChatID       int64  `json:"chat_id"`
-	UserID       int64  `json:"user_id"`
-	Text         string `json:"text"`
-	ReplyTo      string `json:"reply_to,omitempty"`
-	PhotoID      string `json:"photo_id,omitempty"`
-	CallbackID   string `json:"callback_id,omitempty"`
-	CallbackData string `json:"callback_data,omitempty"`
-	MessageID    int64  `json:"message_id"`
+	ConfirmRequired bool   `json:"confirm_required,omitempty"`
+	ID              int64  `json:"id"`
+	ChatID          int64  `json:"chat_id"`
+	UserID          int64  `json:"user_id"`
+	Text            string `json:"text"`
+	ReplyTo         string `json:"reply_to,omitempty"`
+	PhotoID         string `json:"photo_id,omitempty"`
+	CallbackID      string `json:"callback_id,omitempty"`
+	CallbackData    string `json:"callback_data,omitempty"`
+	MessageID       int64  `json:"message_id"`
 }
 type Button struct {
 	Text string `json:"text"`

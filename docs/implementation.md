@@ -43,7 +43,7 @@ The selected model is `anthropic/claude-haiku-5.5`, medium effort, with 4,096 to
 
 ## Storage and deployment
 
-Migration 002 upgrades the imported version-1 DB. The runtime validates migration checksums and rejects newer schemas. It keeps one connection, WAL, full synchronous writes, a five-second busy timeout, 2 MiB page cache and no mmap.
+Migrations 002 and 003 upgrade the imported version-1 DB. The runtime validates migration checksums and rejects newer schemas. It keeps one connection, WAL, full synchronous writes, a five-second busy timeout, 2 MiB page cache and no mmap.
 
 The container runs as UID 10001, with a read-only root, 128 MiB memory limit and 0.5 CPU. Coolify mounts the complete `/data` directory. Groceries, memory, settings, WAL, SHM and the exclusive process lock share that volume. A second instance exits before contacting Telegram. Coolify handles backups.
 
@@ -54,3 +54,5 @@ The container runs as UID 10001, with a read-only root, 128 MiB memory limit and
 Run `python3 scripts/verify.py --record .local/verification/RECORD --containers` once for the reviewed build. Each step saves its full output plus exit status. The script refuses to overwrite an existing record. It runs Python migration tests, Go race tests, vet, compilation, image build and a network-disabled container persistence/lock check.
 
 Use `scripts/measure_resources.py` on the Coolify host for ten-minute idle measurements. Record live deployment checks separately; do not infer production readiness from fixture tests. See `docs/verification-report.md` for actual results once verification finishes.
+
+Actual model behavior requires the opt-in recorder and scenario review in [llm-scenarios.md](llm-scenarios.md). Fixture checks do not verify the selected live model.

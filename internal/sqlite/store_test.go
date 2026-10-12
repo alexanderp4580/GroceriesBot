@@ -192,3 +192,62 @@ func TestUndoConflictAndImmutableDates(t *testing.T) {
 		t.Fatal("undo overwrote another user's edit")
 	}
 }
+func TestPendingCapacity(t *testing.T) {
+	s := openTest(t)
+	ctx := context.Background()
+	for n := 0; n < 1000; n++ {
+		s.db.Exec("INSERT INTO groceries(chat_id,name,category,quantity,added_at) VALUES(-123,'fixture','Other',1,?)", stamp(time.Now()))
+	}
+	seedUpdate(t, s, 1)
+	_, e := s.Apply(ctx, grocery.ActionKey{UpdateID: 1}, grocery.Operation{Kind: "add", ChatID: -123, UserID: 8, Items: []grocery.Item{{Name: "Extra", Quantity: 1}}}, time.Now())
+	if e == nil {
+		t.Fatal("pending capacity exceeded")
+	}
+}
+func TestClearLargeHistoryAndUndo(t *testing.T) {
+	s := openTest(t)
+	ctx := context.Background()
+	for n := 0; n < 1001; n++ {
+		s.db.Exec("INSERT INTO groceries(chat_id,name,category,quantity,added_at,purchased_at) VALUES(-123,'fixture','Other',1,?,?)", stamp(time.Now()), stamp(time.Now()))
+	}
+	seedUpdate(t, s, 1)
+	p, e := s.Prepare(ctx, grocery.ActionKey{UpdateID: 1}, -123, 8, "confirm_clear", nil, time.Now())
+	if e != nil {
+		t.Fatal(e)
+	}
+	seedUpdate(t, s, 2)
+	_, e = s.Apply(ctx, grocery.ActionKey{UpdateID: 2}, grocery.Operation{Kind: "clear", ChatID: -123, UserID: 8, ConfirmationID: p.ID}, time.Now())
+	if e != nil {
+		t.Fatal(e)
+	}
+	var n int
+	s.db.QueryRow("SELECT count(*) FROM groceries WHERE deleted_at IS NULL").Scan(&n)
+	if n != 0 {
+		t.Fatal(n)
+	}
+	seedUpdate(t, s, 3)
+	_, e = s.Apply(ctx, grocery.ActionKey{UpdateID: 3}, grocery.Operation{Kind: "undo", ChatID: -123, UserID: 8}, time.Now())
+	if e != nil {
+		t.Fatal(e)
+	}
+	s.db.QueryRow("SELECT count(*) FROM groceries WHERE deleted_at IS NULL").Scan(&n)
+	if n != 1001 {
+		t.Fatal(n)
+	}
+}
+func TestDelayedEditCannotBeOvertaken(t *testing.T) {
+	s := openTest(t)
+	ctx := context.Background()
+	for _, id := range []int64{1, 2} {
+		seedUpdate(t, s, id)
+		s.Complete(ctx, grocery.Update{ID: id, ChatID: -123, UserID: 8}, []grocery.Outgoing{{Method: "editMessageText", ChatID: -123, MessageID: 77, Text: "revision"}}, "")
+	}
+	r, e := s.NextReply(ctx)
+	if e != nil {
+		t.Fatal(e)
+	}
+	s.RetryReply(ctx, r, time.Hour, false)
+	if _, e = s.NextReply(ctx); !IsEmpty(e) {
+		t.Fatal("new edit overtook delayed older edit", e)
+	}
+}

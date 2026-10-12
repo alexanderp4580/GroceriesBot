@@ -74,6 +74,13 @@ func (s *Store) Apply(ctx context.Context, k grocery.ActionKey, op grocery.Opera
 	result := grocery.Result{}
 	switch op.Kind {
 	case "add":
+		var count int
+		if e = tx.QueryRowContext(ctx, "SELECT count(*) FROM groceries WHERE chat_id=? AND purchased_at IS NULL AND deleted_at IS NULL", op.ChatID).Scan(&count); e != nil {
+			return result, e
+		}
+		if count+len(op.Items) > 1000 {
+			return result, errors.New("pending list capacity is 1000; purchase or remove items first")
+		}
 		if len(op.Items) == 0 || len(op.Items) > 100 {
 			return result, errors.New("add requires 1 to 100 items")
 		}
@@ -99,7 +106,12 @@ func (s *Store) Apply(ctx context.Context, k grocery.ActionKey, op grocery.Opera
 			after = append(after, i)
 		}
 		result.Text = "Added"
-	case "purchase", "remove", "update", "clear":
+	case "clear":
+		result, e = clearRows(ctx, tx, k, op, now)
+		if e != nil {
+			return result, e
+		}
+	case "purchase", "remove", "update":
 		condition := "deleted_at IS NULL"
 		if op.Kind != "clear" {
 			condition += " AND purchased_at IS NULL"
@@ -177,6 +189,11 @@ func (s *Store) Apply(ctx context.Context, k grocery.ActionKey, op grocery.Opera
 		if json.Unmarshal([]byte(b), &before) != nil || json.Unmarshal([]byte(a), &after) != nil {
 			return result, errors.New("invalid journal")
 		}
+		if len(after) == 0 {
+			if e = undoClear(ctx, tx, journal, op.ChatID); e != nil {
+				return result, e
+			}
+		}
 		old := map[int64]grocery.Item{}
 		for _, i := range before {
 			old[i.ID] = i
@@ -207,7 +224,7 @@ func (s *Store) Apply(ctx context.Context, k grocery.ActionKey, op grocery.Opera
 	default:
 		return result, errors.New("unknown grocery operation")
 	}
-	if op.Kind != "undo" {
+	if op.Kind != "undo" && op.Kind != "clear" {
 		_, e = tx.ExecContext(ctx, "INSERT INTO mutation_journal(chat_id,user_id,update_id,before_json,after_json,created_at) VALUES(?,?,?,?,?,?)", op.ChatID, op.UserID, k.UpdateID, encoded(before), encoded(after), stamp(now))
 		if e != nil {
 			return result, e
@@ -216,6 +233,13 @@ func (s *Store) Apply(ctx context.Context, k grocery.ActionKey, op grocery.Opera
 		for _, i := range after {
 			result.Text += fmt.Sprintf("\n#%d %s", i.ID, grocery.Label(i))
 		}
+	}
+	var pendingCount int
+	if e = tx.QueryRowContext(ctx, "SELECT count(*) FROM groceries WHERE chat_id=? AND purchased_at IS NULL AND deleted_at IS NULL", op.ChatID).Scan(&pendingCount); e != nil {
+		return result, e
+	}
+	if pendingCount > 1000 {
+		return result, errors.New("undo would exceed the pending list capacity")
 	}
 	if _, e = tx.ExecContext(ctx, "INSERT INTO chat_state(chat_id,list_revision,updated_at) VALUES(?,1,?) ON CONFLICT(chat_id) DO UPDATE SET list_revision=list_revision+1,updated_at=excluded.updated_at", op.ChatID, stamp(now)); e != nil {
 		return result, e
@@ -347,4 +371,18 @@ func (s *Store) Aliases(ctx context.Context, chat int64) (map[string]string, err
 		v[a] = n
 	}
 	return v, rows.Err()
+}
+func (s *Store) Action(ctx context.Context, k grocery.ActionKey) (grocery.Operation, grocery.Result, error) {
+	var args, raw string
+	var op grocery.Operation
+	var result grocery.Result
+	e := s.db.QueryRowContext(ctx, "SELECT arguments_json,result_json FROM tool_actions WHERE update_id=? AND round_index=? AND action_index=?", k.UpdateID, k.RoundIndex, k.ActionIndex).Scan(&args, &raw)
+	if e != nil {
+		return op, result, e
+	}
+	if e = json.Unmarshal([]byte(args), &op); e != nil {
+		return op, result, e
+	}
+	e = json.Unmarshal([]byte(raw), &result)
+	return op, result, e
 }
