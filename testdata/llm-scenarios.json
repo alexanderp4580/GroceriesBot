@@ -69,8 +69,7 @@
         "fallback_text": "Yes, add all of those proposed ingredients with the quantities you listed."
       },
       {
-        "confirm": true,
-        "fallback_text": "Yes, confirm adding all of the proposed ingredients."
+        "confirm": true
       }
     ]
   },
@@ -88,8 +87,7 @@
         "fallback_text": "Yes, add all three items from the note, with their quantities."
       },
       {
-        "confirm": true,
-        "fallback_text": "Yes, confirm adding all three items."
+        "confirm": true
       }
     ]
   },
@@ -167,7 +165,7 @@
     "steps": [
       {
         "text": "Change #1 to 3 cartons.",
-        "reply_to": "#1 1 × Oatly Barista"
+        "reply_to": "#1 1 \u00d7 Oatly Barista"
       }
     ]
   },
