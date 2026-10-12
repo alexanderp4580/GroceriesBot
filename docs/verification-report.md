@@ -22,3 +22,9 @@ The independent review found five important issues. Regression tests reproduced 
 Actual Haiku tests cost $0.0079504 for 29 requests across 14 scenarios. See [llm-results.md](llm-results.md) for recorded behavior and incomplete flows. Fixture success does not establish live AI readiness.
 
 Coolify deployment and ten-minute host resource measurements have not run. The user redirected the task to recorded tests and cost reporting. No production workflow, webhook or container changed.
+
+## Follow-up verification
+
+Recorded race-suite output for the runner fixes is in `.local/verification/flow-runner-fix/` and `.local/verification/banana-probe/`. Both suites passed. New regressions cover following actual clarification labels, replying to text-only proposals, selecting only requested scenarios, and preserving a full-size PNG while estimating image cost from visual tokens instead of base64 text bytes.
+
+Two saved-conversation continuations and the generated banana photo completed with application confirmation. `scripts/check_recorded_flows.py` compares the final rows with the actual recorded proposal, checks zero insertions before confirmation and confirms consumed pending state. Total OpenRouter cost is $0.0103365. See [llm-results.md](llm-results.md).

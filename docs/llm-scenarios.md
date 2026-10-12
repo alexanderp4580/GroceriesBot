@@ -35,3 +35,17 @@ PYTHONPATH=.local/capture-deps python3 scripts/capture_llm.py --record .local/ll
 The runner refuses to overwrite records. A recording budget applies across the run; it stops before a request whose conservative token-price allowance exceeds the remaining budget. Missing/invalid usage retains that allowance. Unknown or unavailable model metadata stops the run. Production `llm.enabled` stays false.
 
 Review raw results before changing prompts or parsers. Add sanitized captured responses to regression fixtures only after recording their source model/provider/settings and removing private content. Re-run only scenarios affected by a change, in a new record directory.
+
+## Targeted continuations and custom photos
+
+Use `--scenario ID` to select cases; unselected cases do not make provider requests. `--resume RECORD` copies selected synthetic DBs, skips initial prompts and retains saved memory/clarifications. The manifest records copied DB hashes, starting update IDs, effective steps and any expiry refresh in the lab copy.
+
+The follow-up handler uses the actual pending action. It can click a configured option label from a recorded response, answer a clarification in ordinary text, or reply to a text-only proposal. It does not invent missing options or silently treat absence as success.
+
+```sh
+PYTHONPATH=.local/capture-deps python3 scripts/capture_llm.py --record .local/llm-results/NEW_RECORD --resume .local/llm-results/live-haiku-2 --scenario ingredients --scenario photo --allow-paid-model-calls --max-usd 0.10
+PYTHONPATH=.local/capture-deps python3 scripts/capture_llm.py --record .local/llm-results/NEW_PHOTO_RECORD --scenario banana_phone --image testdata/images/banana-phone-blurry.png --allow-paid-model-calls --max-usd 0.10
+python3 scripts/check_recorded_flows.py .local/llm-results/NEW_RECORD --previous .local/llm-results/live-haiku-2
+```
+
+The custom PNG enters the request unchanged. The capture manifest records its path, dimensions and SHA-256. The banana prompt asks for the item in the image without naming it. The recorder budgets inline images by a conservative visual-token allowance rather than treating base64 bytes as text tokens; raw traffic retains the complete original image.

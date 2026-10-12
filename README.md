@@ -40,4 +40,4 @@ Coolify builds `Dockerfile` using `deploy/compose.yaml`, with one replica, 128 M
 
 Read [implementation](docs/implementation.md), [design](docs/design.md), [deployment](docs/deployment.md), [migration](docs/migration.md), and [verification results](docs/verification-report.md). The selected behavior settings live in SQLite; use the CLI to inspect or change them.
 
-Recorded live model behavior and total cost: [LLM results](docs/llm-results.md). Two flows need further verification; see the report before enabling production AI.
+Recorded live model behavior and total cost: [LLM results](docs/llm-results.md). The ingredient and photo continuations completed; shelf-ordering quality still needs work. See the report before enabling production AI.
