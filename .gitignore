@@ -13,3 +13,6 @@ data/
 *-wal
 *-shm
 __pycache__/
+
+.worktrees/
+.superpowers/
