@@ -2,12 +2,16 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"github.com/alexanderp4580/GroceriesBot/internal/grocery"
+	"github.com/alexanderp4580/GroceriesBot/internal/sqlite"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 type fixtureTransport struct {
@@ -43,5 +47,45 @@ func TestRecorderBudgetRejectsBeforeProvider(t *testing.T) {
 	req, _ := http.NewRequest("POST", "https://openrouter.ai/api/v1/chat/completions", bytes.NewBufferString(`{"model":"fixture","max_tokens":100}`))
 	if _, e := r.RoundTrip(req); e == nil || base.Calls != 0 {
 		t.Fatal("provider called above capture budget")
+	}
+}
+
+// The recorded photo used ask/clarify, not confirm_add. Follow the actual button label.
+func TestFollowUpAnswersCapturedClarification(t *testing.T) {
+	ctx := context.Background()
+	s, e := sqlite.Open(ctx, filepath.Join(t.TempDir(), "fixture.db"))
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer s.Close()
+	s.Accept(ctx, []grocery.Update{{ID: 1, ChatID: -123, UserID: 8}}, 2)
+	p, e := s.Prepare(ctx, grocery.ActionKey{UpdateID: 1}, -123, 8, "clarify", map[string]any{"confirm_required": true, "original": "Add groceries from this note.", "question": "Shall I add these 3 items?", "options": []string{"Yes, add all 3", "No, cancel"}}, time.Now())
+	if e != nil {
+		t.Fatal(e)
+	}
+	u, _, skip, e := followUp(ctx, s, step{Confirm: true, OptionText: "Yes, add all 3", Fallback: "Yes, add all three items."}, 2)
+	if e != nil || skip || u.CallbackData != callback("choice0", p.ID) {
+		t.Fatal(u, skip, e)
+	}
+}
+func TestFollowUpAnswersTextOnlyProposal(t *testing.T) {
+	ctx := context.Background()
+	s, e := sqlite.Open(ctx, filepath.Join(t.TempDir(), "fixture.db"))
+	if e != nil {
+		t.Fatal(e)
+	}
+	defer s.Close()
+	u, _, skip, e := followUp(ctx, s, step{Confirm: true, Fallback: "Yes, add all the proposed ingredients."}, 2)
+	if e != nil || skip || u.Text != "Yes, add all the proposed ingredients." || u.CallbackData != "" {
+		t.Fatal(u, skip, e)
+	}
+}
+func TestScenarioSelectionDoesNotRepeatUnselectedCases(t *testing.T) {
+	cases, e := selectCases([]scenario{{ID: "photo"}, {ID: "ingredients"}, {ID: "explicit_add"}}, []string{"photo", "ingredients"})
+	if e != nil || len(cases) != 2 {
+		t.Fatal(cases, e)
+	}
+	if _, e = selectCases([]scenario{{ID: "photo"}}, []string{"typo"}); e == nil {
+		t.Fatal("unknown selection accepted")
 	}
 }

@@ -24,14 +24,18 @@ import (
 type configuration struct {
 	Key, Record, Model                   string
 	MaxUSD, PromptPrice, CompletionPrice float64
+	Only                                 []string
+	Resume                               bool
+	StartIDs                             map[string]int64
 }
 type step struct {
-	Text     string `json:"text"`
-	Reply    string `json:"reply_to"`
-	Photo    string `json:"photo"`
-	Option   *int   `json:"select_option"`
-	Fallback string `json:"fallback_text"`
-	Confirm  bool   `json:"confirm"`
+	Text       string `json:"text"`
+	OptionText string `json:"option_text"`
+	Reply      string `json:"reply_to"`
+	Photo      string `json:"photo"`
+	Option     *int   `json:"select_option"`
+	Fallback   string `json:"fallback_text"`
+	Confirm    bool   `json:"confirm"`
 }
 type scenario struct {
 	ID      string         `json:"id"`
@@ -180,6 +184,10 @@ func run() error {
 	if e = json.Unmarshal(raw, &cases); e != nil {
 		return e
 	}
+	cases, e = selectCases(cases, cfg.Only)
+	if e != nil {
+		return e
+	}
 	photo, e := os.ReadFile(filepath.Join(cfg.Record, "grocery-note.png"))
 	if e != nil {
 		return e
@@ -202,50 +210,37 @@ func run() error {
 		s.SetSetting(ctx, "llm.daily_budget_usd", budgetJSON)
 		s.SetSetting(ctx, "llm.monthly_budget_usd", budgetJSON)
 		var id int64
-		if e = seed(ctx, s, &id, c.History, true); e != nil {
-			return e
+		if cfg.Resume {
+			id = cfg.StartIDs[c.ID]
+			if id == 0 {
+				return errors.New("resume source update ID missing")
+			}
+			if len(c.Steps) > 0 {
+				c.Steps = c.Steps[1:]
+			}
+		} else {
+			if e = seed(ctx, s, &id, c.History, true); e != nil {
+				return e
+			}
+			if e = seed(ctx, s, &id, c.Pending, false); e != nil {
+				return e
+			}
 		}
-		if e = seed(ctx, s, &id, c.Pending, false); e != nil {
-			return e
-		}
+
 		b := bot.New(s, messenger{photo}, client, "synthetic-capture-signing-key")
 		result := map[string]any{"scenario": c.ID, "find_out": c.Find, "before": observe(ctx, s)}
 		observations := []map[string]any{}
 		for _, step := range c.Steps {
 			id++
-			u := grocery.Update{ID: id, ChatID: -123, UserID: 8, Text: step.Text, ReplyTo: step.Reply}
-			if step.Photo != "" {
-				u.PhotoID = step.Photo
+			u, note, skip, e := followUp(ctx, s, step, id)
+			if e != nil {
+				return e
 			}
-			note := ""
-			if step.Option != nil || step.Confirm {
-				p, e := s.PendingAction(ctx, -123, 8)
-				switch {
-				case e == nil && step.Confirm && (p.Kind == "confirm_add" || p.Kind == "confirm_clear"):
-					u.CallbackID = "fixture"
-					u.CallbackData = callback("confirm", p.ID)
-				case e == nil && step.Option != nil && p.Kind == "clarify":
-					var a struct {
-						Options []string `json:"options"`
-					}
-					json.Unmarshal(p.Payload, &a)
-					if *step.Option >= 0 && *step.Option < len(a.Options) {
-						u.CallbackID = "fixture"
-						u.CallbackData = callback(fmt.Sprintf("choice%d", *step.Option), p.ID)
-					} else {
-						u.Text = step.Fallback
-						note = "No matching option; used configured human reply."
-					}
-				default:
-					note = "Requested follow-up interaction was absent."
-					if step.Fallback != "" {
-						u.Text = step.Fallback
-					} else {
-						observations = append(observations, map[string]any{"note": note, "state": observe(ctx, s)})
-						continue
-					}
-				}
+			if skip {
+				observations = append(observations, map[string]any{"note": note, "state": observe(ctx, s)})
+				continue
 			}
+
 			if e = s.Accept(ctx, []grocery.Update{u}, id+1); e != nil {
 				return e
 			}
