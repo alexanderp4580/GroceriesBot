@@ -53,3 +53,24 @@ func TestPhotoReadIsBoundedWithoutContentLength(t *testing.T) {
 		t.Fatal("accepted oversized image")
 	}
 }
+func TestSetCommandsRegistersMenu(t *testing.T) {
+	var method string
+	var body struct {
+		Commands []Command `json:"commands"`
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		method = r.URL.Path[strings.LastIndex(r.URL.Path, "/")+1:]
+		json.NewDecoder(r.Body).Decode(&body)
+		w.Write([]byte(`{"ok":true,"result":true}`))
+	}))
+	defer srv.Close()
+	c := New("fixture", srv.Client())
+	c.BaseURL = srv.URL
+	want := []Command{{"list", "Shopping list"}, {"undo", "Undo your last action"}}
+	if e := c.SetCommands(context.Background(), want); e != nil {
+		t.Fatal(e)
+	}
+	if method != "setMyCommands" || len(body.Commands) != 2 || body.Commands[1].Command != "undo" || body.Commands[1].Description != "Undo your last action" {
+		t.Fatal(method, body)
+	}
+}

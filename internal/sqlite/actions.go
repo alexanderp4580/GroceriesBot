@@ -105,7 +105,7 @@ func (s *Store) Apply(ctx context.Context, k grocery.ActionKey, op grocery.Opera
 			i.Version = 1
 			after = append(after, i)
 		}
-		result.Text = "Added"
+		result.Text = "📝 Added"
 	case "clear":
 		result, e = clearRows(ctx, tx, k, op, now)
 		if e != nil {
@@ -178,7 +178,7 @@ func (s *Store) Apply(ctx context.Context, k grocery.ActionKey, op grocery.Opera
 			}
 			after = append(after, i)
 		}
-		result.Text = map[string]string{"purchase": "Purchased", "remove": "Removed", "update": "Updated", "clear": "Cleared"}[op.Kind]
+		result.Text = map[string]string{"purchase": "✅ Purchased", "remove": "❌ Removed", "update": "✏️ Updated", "clear": "🧹 Cleared"}[op.Kind]
 	case "undo":
 		var journal int64
 		var b, a string
@@ -220,7 +220,7 @@ func (s *Store) Apply(ctx context.Context, k grocery.ActionKey, op grocery.Opera
 		if _, e = tx.ExecContext(ctx, "UPDATE mutation_journal SET undone_at=? WHERE id=?", stamp(now), journal); e != nil {
 			return result, e
 		}
-		result.Text = "Undid your last action"
+		result.Text = "↩️ Undid your last action"
 	default:
 		return result, errors.New("unknown grocery operation")
 	}

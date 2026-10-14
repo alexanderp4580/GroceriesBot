@@ -218,6 +218,17 @@ func (c *Client) RemoveWebhook(ctx context.Context) error {
 	_, e := c.call(ctx, "deleteWebhook", map[string]bool{"drop_pending_updates": false})
 	return e
 }
+
+// Command is one entry of the Telegram command menu; Command has no leading slash.
+type Command struct {
+	Command     string `json:"command"`
+	Description string `json:"description"`
+}
+
+func (c *Client) SetCommands(ctx context.Context, commands []Command) error {
+	_, e := c.call(ctx, "setMyCommands", map[string]any{"commands": commands})
+	return e
+}
 func SplitText(s string, max int) []string {
 	var out []string
 	var b strings.Builder

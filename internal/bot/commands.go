@@ -6,12 +6,25 @@ import (
 	"fmt"
 	"github.com/alexanderp4580/GroceriesBot/internal/grocery"
 	"github.com/alexanderp4580/GroceriesBot/internal/openrouter"
+	"github.com/alexanderp4580/GroceriesBot/internal/telegram"
 	"strconv"
 	"strings"
 	"time"
 )
 
 const help = "/add [quantity] [unit] item — add an item\n/list — shopping list with purchase buttons\n/done ID… or all — mark purchased\n/remove ID… — remove items\n/undo — undo your last action\n/clear — confirm clearing the full list\n/cancel — cancel your pending question\n/save NAME — save pending items as a template\n/templates — saved templates\n/usual [NAME] — confirm adding a template\n/alias generic = preferred — approve a name alias\n/usage — model cost and tokens\n\nAI text, photos and shelf ordering are available when AI is enabled."
+
+// Menu is the command list registered with Telegram; /usual and its helpers are reachable but not listed.
+var Menu = []telegram.Command{
+	{Command: "list", Description: "Shopping list with purchase buttons"},
+	{Command: "add", Description: "Add an item: /add [quantity] [unit] item"},
+	{Command: "done", Description: "Mark items purchased: /done ID… or all"},
+	{Command: "remove", Description: "Remove items: /remove ID…"},
+	{Command: "undo", Description: "Undo your last action"},
+	{Command: "cancel", Description: "Cancel your pending question"},
+	{Command: "usage", Description: "Model cost and tokens"},
+	{Command: "help", Description: "All commands"},
+}
 
 func parseAdd(s string) (grocery.Item, error) {
 	fields := strings.Fields(s)

@@ -27,7 +27,7 @@ func clearRows(ctx context.Context, tx *sql.Tx, k grocery.ActionKey, op grocery.
 		return grocery.Result{}, e
 	}
 	_, e = tx.ExecContext(ctx, "UPDATE groceries SET deleted_at=?,version=version+1 WHERE chat_id=? AND deleted_at IS NULL", stamp(now), op.ChatID)
-	return grocery.Result{Text: fmt.Sprintf("Cleared %d items", n)}, e
+	return grocery.Result{Text: fmt.Sprintf("🧹 Cleared %d items", n)}, e
 }
 func undoClear(ctx context.Context, tx *sql.Tx, jid, chat int64) error {
 	var bad int

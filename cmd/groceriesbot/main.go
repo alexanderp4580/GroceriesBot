@@ -127,6 +127,9 @@ func run() error {
 		if info.URL != "" {
 			return errors.New("Telegram webhook exists; complete explicit cutover before polling")
 		}
+		if e = t.SetCommands(ctx, bot.Menu); e != nil {
+			return errors.New("registering Telegram commands failed")
+		}
 		ready = true
 	}
 	srv := &http.Server{Addr: cfg.Listen, Handler: life.HealthHandler(db.Ping, func() bool { return ready }), ReadHeaderTimeout: 5 * time.Second}
