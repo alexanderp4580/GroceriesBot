@@ -94,7 +94,7 @@ func (s *Store) Apply(ctx context.Context, k grocery.ActionKey, op grocery.Opera
 			} else if e != sql.ErrNoRows {
 				return result, e
 			}
-			res, e := tx.ExecContext(ctx, "INSERT INTO groceries(chat_id,name,category,quantity,unit,added_at) VALUES(?,?,?,?,?,?)", op.ChatID, i.Name, i.Category, i.Quantity, i.Unit, stamp(now))
+			res, e := tx.ExecContext(ctx, "INSERT INTO groceries(chat_id,name,category,quantity,unit,emoji,added_at) VALUES(?,?,?,?,?,?,?)", op.ChatID, i.Name, i.Category, i.Quantity, i.Unit, i.Emoji, stamp(now))
 			if e != nil {
 				return result, e
 			}
@@ -167,12 +167,15 @@ func (s *Store) Apply(ctx context.Context, k grocery.ActionKey, op grocery.Opera
 				if p.Unit != "" {
 					i.Unit = p.Unit
 				}
+				if p.Emoji != "" {
+					i.Emoji = p.Emoji
+				}
 				if e = grocery.ValidateItem(&i); e != nil {
 					return result, e
 				}
 			}
 			i.Version++
-			_, e = tx.ExecContext(ctx, "UPDATE groceries SET name=?,category=?,quantity=?,unit=?,purchased_at=?,deleted_at=?,version=? WHERE id=? AND chat_id=?", i.Name, i.Category, i.Quantity, i.Unit, i.PurchasedAt, i.DeletedAt, i.Version, i.ID, op.ChatID)
+			_, e = tx.ExecContext(ctx, "UPDATE groceries SET name=?,category=?,quantity=?,unit=?,emoji=?,purchased_at=?,deleted_at=?,version=? WHERE id=? AND chat_id=?", i.Name, i.Category, i.Quantity, i.Unit, i.Emoji, i.PurchasedAt, i.DeletedAt, i.Version, i.ID, op.ChatID)
 			if e != nil {
 				return result, e
 			}
@@ -211,7 +214,7 @@ func (s *Store) Apply(ctx context.Context, k grocery.ActionKey, op grocery.Opera
 				v.DeletedAt = &d
 			}
 			v.Version = version + 1
-			_, e = tx.ExecContext(ctx, "UPDATE groceries SET name=?,category=?,quantity=?,unit=?,purchased_at=?,deleted_at=?,version=? WHERE id=? AND chat_id=?", v.Name, v.Category, v.Quantity, v.Unit, v.PurchasedAt, v.DeletedAt, v.Version, v.ID, op.ChatID)
+			_, e = tx.ExecContext(ctx, "UPDATE groceries SET name=?,category=?,quantity=?,unit=?,emoji=?,purchased_at=?,deleted_at=?,version=? WHERE id=? AND chat_id=?", v.Name, v.Category, v.Quantity, v.Unit, v.Emoji, v.PurchasedAt, v.DeletedAt, v.Version, v.ID, op.ChatID)
 			if e != nil {
 				return result, e
 			}

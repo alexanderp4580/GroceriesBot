@@ -15,6 +15,7 @@ type Item struct {
 	Category    string  `json:"category"`
 	Quantity    float64 `json:"quantity"`
 	Unit        string  `json:"unit,omitempty"`
+	Emoji       string  `json:"emoji,omitempty"`
 	AddedAt     string  `json:"added_at,omitempty"`
 	PurchasedAt *string `json:"purchased_at,omitempty"`
 	DeletedAt   *string `json:"deleted_at,omitempty"`
@@ -81,6 +82,7 @@ func ValidateItem(i *Item) error {
 	i.Name = strings.TrimSpace(i.Name)
 	i.Category = strings.TrimSpace(i.Category)
 	i.Unit = strings.ToLower(strings.TrimSpace(i.Unit))
+	i.Emoji = strings.TrimSpace(i.Emoji)
 	if i.Name == "" || len(i.Name) > 300 || len(i.Category) > 100 {
 		return errors.New("item name/category is invalid")
 	}
@@ -89,6 +91,9 @@ func ValidateItem(i *Item) error {
 	}
 	if math.IsNaN(i.Quantity) || math.IsInf(i.Quantity, 0) || i.Quantity <= 0 || i.Quantity > 1e6 {
 		return errors.New("quantity must be between 0 and 1000000")
+	}
+	if len(i.Emoji) > 32 {
+		return errors.New("emoji is too long")
 	}
 	if len(i.Unit) > 32 {
 		return errors.New("unit is too long")
@@ -107,6 +112,9 @@ func Label(i Item) string {
 	q := fmt.Sprintf("%g", i.Quantity)
 	if i.Unit != "" {
 		q += " " + i.Unit
+	}
+	if i.Emoji != "" {
+		return i.Emoji + " " + q + " × " + i.Name
 	}
 	return q + " × " + i.Name
 }

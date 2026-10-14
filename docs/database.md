@@ -8,7 +8,7 @@ The migration created schema version 1 from [001_initial.sql](../migrations/001_
 
 | Table | Contents |
 | --- | --- |
-| `groceries` | Stable ID, chat, legacy ID, item, category, quantity, UTC dates, deletion state and version |
+| `groceries` | Stable ID, chat, legacy ID, item, category, quantity, unit, model-chosen emoji, UTC dates, deletion state and version |
 | `settings` | Behavior settings as JSON, with update timestamps |
 | `chat_state` | List revision per chat |
 | `conversation_messages` | User, assistant and tool messages, scoped by chat |

@@ -282,7 +282,7 @@ type queryer interface {
 	QueryContext(context.Context, string, ...any) (*sql.Rows, error)
 }
 
-const itemColumns = "id,name,category,quantity,unit,added_at,purchased_at,deleted_at,version"
+const itemColumns = "id,name,category,quantity,unit,emoji,added_at,purchased_at,deleted_at,version"
 
 func items(ctx context.Context, q queryer, chat int64, condition string, args ...any) ([]grocery.Item, error) {
 	args = append([]any{chat}, args...)
@@ -294,7 +294,7 @@ func items(ctx context.Context, q queryer, chat int64, condition string, args ..
 	v := []grocery.Item{}
 	for rows.Next() {
 		var i grocery.Item
-		if e = rows.Scan(&i.ID, &i.Name, &i.Category, &i.Quantity, &i.Unit, &i.AddedAt, &i.PurchasedAt, &i.DeletedAt, &i.Version); e != nil {
+		if e = rows.Scan(&i.ID, &i.Name, &i.Category, &i.Quantity, &i.Unit, &i.Emoji, &i.AddedAt, &i.PurchasedAt, &i.DeletedAt, &i.Version); e != nil {
 			return nil, e
 		}
 		v = append(v, i)
@@ -316,7 +316,7 @@ func (s *Store) History(ctx context.Context, chat int64) ([]grocery.Item, error)
 	v := []grocery.Item{}
 	for rows.Next() {
 		var i grocery.Item
-		if e = rows.Scan(&i.ID, &i.Name, &i.Category, &i.Quantity, &i.Unit, &i.AddedAt, &i.PurchasedAt, &i.DeletedAt, &i.Version); e != nil {
+		if e = rows.Scan(&i.ID, &i.Name, &i.Category, &i.Quantity, &i.Unit, &i.Emoji, &i.AddedAt, &i.PurchasedAt, &i.DeletedAt, &i.Version); e != nil {
 			return nil, e
 		}
 		v = append(v, i)

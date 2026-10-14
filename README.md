@@ -2,7 +2,7 @@
 
 A Go Telegram grocery assistant with SQLite storage, deployed on Coolify. It replaces the groceries n8n workflow and Sheets storage with one process and a persistent `/data` volume.
 
-Use `/list` for purchase buttons. The bot updates the same list after a purchase. IDs shown beside items work with `/done` and `/remove`.
+Use `/list` for purchase buttons. The bot updates the same list after a purchase. IDs shown beside items work with `/done` and `/remove`. The model chooses an emoji for each item it adds or edits; the list, buttons and summaries show it.
 
 In active mode the bot registers `/list`, `/add`, `/done`, `/remove`, `/undo`, `/cancel`, `/usage` and `/help` as the Telegram command menu at startup. The other commands work but are not listed.
 

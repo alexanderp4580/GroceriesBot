@@ -288,3 +288,29 @@ func TestMissingCostKeepsBudgetReservation(t *testing.T) {
 		t.Fatal("unknown bill released conservative allowance")
 	}
 }
+func TestItemEmojiIsStoredEditedAndRestoredByUndo(t *testing.T) {
+	s := openTest(t)
+	ctx := context.Background()
+	seedUpdate(t, s, 1)
+	_, e := s.Apply(ctx, grocery.ActionKey{UpdateID: 1}, grocery.Operation{Kind: "add", ChatID: -123, UserID: 8, Items: []grocery.Item{{Name: "Lemons", Category: "Fruits", Quantity: 2, Emoji: "🍋"}}}, time.Now())
+	if e != nil {
+		t.Fatal(e)
+	}
+	items, _ := s.Pending(ctx, -123)
+	if len(items) != 1 || items[0].Emoji != "🍋" {
+		t.Fatal("emoji not stored", items)
+	}
+	seedUpdate(t, s, 2)
+	r, e := s.Apply(ctx, grocery.ActionKey{UpdateID: 2}, grocery.Operation{Kind: "update", ChatID: -123, UserID: 8, Items: []grocery.Item{{ID: items[0].ID, Emoji: "🍊"}}}, time.Now())
+	if e != nil || len(r.Items) != 1 || r.Items[0].Emoji != "🍊" {
+		t.Fatal("emoji not edited", r, e)
+	}
+	seedUpdate(t, s, 3)
+	if _, e = s.Apply(ctx, grocery.ActionKey{UpdateID: 3}, grocery.Operation{Kind: "undo", ChatID: -123, UserID: 8}, time.Now()); e != nil {
+		t.Fatal(e)
+	}
+	items, _ = s.Pending(ctx, -123)
+	if len(items) != 1 || items[0].Emoji != "🍋" {
+		t.Fatal("undo did not restore emoji", items)
+	}
+}
